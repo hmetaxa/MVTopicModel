@@ -1,4 +1,4 @@
-package cc.mallet.topics;
+package  org.madgik.MVTopicModel;
 
 import java.util.*;
 import cc.mallet.types.*;
