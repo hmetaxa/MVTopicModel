@@ -1,6 +1,5 @@
 package org.madgik.MVTopicModel;
 
-
 import org.madgik.utils.FastQDelta;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import org.madgik.utils.FTree;
@@ -465,7 +464,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                     if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
                     {
-                         
+
                         System.arraycopy(typeVectors[w], 0, totalTypeVector, 0, vectorSize);
                         System.arraycopy(topicVectors[topic], 0, totalTypeVector, vectorSize, vectorSize);
 
@@ -479,15 +478,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         //totalTopicVector = null;
 
                     }
-                    
 
-                    
                 }
             }
         }
     }
 
-   
 //    private void CalcTopicVectors(int maxNumWords) {
 //        ArrayList<ArrayList<TreeSet<IDSorter>>> topicSortedWords = new ArrayList<ArrayList<TreeSet<IDSorter>>>(numModalities);
 //
@@ -2564,8 +2560,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         double sum = 0;
         for (int i = 0; i < distribution.length; i++) {
 
-            distribution[i] = random.nextGamma(partition[i] * magnitude, 1);
-            if (distribution[i] <= 0) {
+            if (partition[i] * magnitude > 0) {
+                distribution[i] = random.nextGamma(partition[i] * magnitude, 1);
+                if (distribution[i] <= 0) {
+                    distribution[i] = 0.0001;
+                }
+            } else {
                 distribution[i] = 0.0001;
             }
             sum += distribution[i];

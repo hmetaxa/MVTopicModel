@@ -58,10 +58,10 @@ public class FeatureSequenceRemovePlural extends Pipe {
 
         if (instance.getData() instanceof FeatureSequence) {
 
-            FeatureSequence features = (FeatureSequence) instance.getData();
+            FeatureSequenceEx features = new FeatureSequenceEx( (FeatureSequence) instance.getData() );
 
-            for (int position = 0; position < features.size(); position++) {
-                String tmp = (String) features.get(position);
+            for (int position = 0; position < features.featureSequence.size(); position++) {
+                String tmp = (String) features.featureSequence.get(position);
                 int newIndex = findSingularIndexForTerm(tmp);
                 if (newIndex != -1) {
                     features.setIndexAtPosition(position, newIndex);

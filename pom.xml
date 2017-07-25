@@ -48,6 +48,29 @@
             <version>2.0.4</version>
         </dependency>
     </dependencies>
+      <repositories>
+        <!-- for JWNL -->
+        <repository>
+            <id>opennlp.sourceforge.net</id>
+            <url>http://opennlp.sourceforge.net/maven2</url>
+        </repository>
+<!--         for Trove -->
+        <repository>
+            <id>maven.ontotext.com</id>
+            <url>http://maven.ontotext.com/content/repositories/public/</url>
+        </repository>
+<!--         for MTJ -->
+        <repository>
+            <id>repo.scalanlp.org</id>
+            <url>http://repo.scalanlp.org/repo</url>
+        </repository>        
+        <repository>
+            <id>xerial</id>
+            <url>http://repo1.maven.org/maven2/org/xerial</url>
+        </repository>
+        
+        
+    </repositories>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>

@@ -2,24 +2,18 @@ package org.madgik.MVTopicModel;
 
 import org.madgik.utils.CsvBuilder;
 import org.madgik.utils.HtmlBuilder;
-import cc.mallet.examples.*;
+
 import cc.mallet.util.*;
 
 import cc.mallet.types.*;
 import cc.mallet.pipe.*;
+//import cc.mallet.types.InstanceList;
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
-//import cc.mallet.pipe.iterator.*;
-//import cc.mallet.topics.*;
-//import cc.mallet.util.Maths;
-//import gnu.trove.map.TIntObjectMap;
-//import gnu.trove.map.TObjectIntMap;
-//import gnu.trove.map.hash.TIntObjectHashMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 
 import java.util.*;
-//import java.util.regex.*;
 import java.io.*;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -82,7 +76,7 @@ public class PTMFlow {
         //boolean ignoreSkewness = true;
         int numTopics = 400;
         //int maxNumTopics = 500;
-        int numIterations = 800; //Max 2000
+        int numIterations = 700; //Max 2000
         int numChars = 4000;
         //int independentIterations = 0;
         int burnIn = 50;
@@ -1629,11 +1623,11 @@ public class PTMFlow {
 
             if (experimentType == ExperimentType.ACM) {
 
-                txtsql = "select pubId, text, fulltext from acmpubviewtxt";
+                txtsql = "select pubId, text, fulltext from acmpubviewtxt ";
                 if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from ACMPubView";
+                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from ACMPubView  ";
                 } else if (PPRenabled == Net2BoWType.OneWay) {
-                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from acmpubviewoneway";
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from acmpubviewoneway ";
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
                     sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from ACMPubViewTwoWay";
                 }
