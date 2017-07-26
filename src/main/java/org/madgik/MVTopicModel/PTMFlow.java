@@ -23,7 +23,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.logging.Logger;
 
-import java.sql.*;
 import org.madgik.utils.CSV2FeatureSequence;
 import org.madgik.utils.FeatureSequenceRemovePlural;
 import static org.madgik.utils.Utils.cosineSimilarity;
@@ -57,150 +56,49 @@ public class PTMFlow {
 
     public static Logger logger = MalletLogger.getLogger(PTMFlow.class.getName());
 
+    int topWords = 20;
+    int showTopicsInterval = 50;
+    byte numModalities = 6;
+    double docTopicsThreshold = 0.03;
+    int docTopicsMax = -1;
+    int numOfThreads = 4;
+    int numTopics = 400;
+    int numIterations = 700; //Max 2000
+    int numChars = 4000;
+    int burnIn = 50;
+    int optimizeInterval = 50;
+    ExperimentType experimentType = ExperimentType.ACM;
+    int pruneCnt = 300;
+    int pruneLblCnt = 25;
+    double pruneMaxPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
+    double pruneMinPerc = 0.05;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
+    boolean ACMAuthorSimilarity = true;
+    boolean calcEntitySimilarities = false;
+    boolean calcTopicSimilarities = false;
+    boolean calcPPRSimilarities = false;
+    boolean runTopicModelling = true;
+    boolean runWordEmbeddings = false;
+    boolean useTypeVectors = false;
+    boolean trainTypeVectors = false;
+    boolean findKeyPhrases = false;
+    double useTypeVectorsProb = 0.6;
+    Net2BoWType PPRenabled = Net2BoWType.OneWay;
+    int vectorSize = 200;
+    String SQLConnectionString = "jdbc:postgresql://localhost:5432/test?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
+
     public PTMFlow() throws IOException {
 
-        int topWords = 20;
-        int showTopicsInterval = 50;
-        //int topLabels = 10;p
-        byte numModalities = 6;
-
-        //int numIndependentTopics = 0;
-        double docTopicsThreshold = 0.03;
-        int docTopicsMax = -1;
-        //boolean ignoreLabels = true;
-        //boolean runOnLine = false;
-
-        //boolean calcTokensPerEntity = true;
-        int numOfThreads = 4;
-        //iMixParallelTopicModel.SkewType skewOn = iMixParallelTopicModel.SkewType.None;
-        //boolean ignoreSkewness = true;
-        int numTopics = 400;
-        //int maxNumTopics = 500;
-        int numIterations = 700; //Max 2000
-        int numChars = 4000;
-        //int independentIterations = 0;
-        int burnIn = 50;
-        int optimizeInterval = 50;
-        ExperimentType experimentType = ExperimentType.ACM;
-        String experimentSubType = "";
-        int pruneCnt = 300;
-        int pruneLblCnt = 25;
-        //int pruneCnt = 0; 
-        //int pruneLblCnt = 0;
-        double pruneMaxPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
-        double pruneMinPerc = 0.05;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
-        boolean ACMAuthorSimilarity = true;
-        boolean ubuntu = false;
 
-        boolean calcEntitySimilarities = false;
-        boolean calcTopicSimilarities = false;
-        boolean calcPPRSimilarities = false;
-        boolean runTopicModelling = true;
-        boolean runOrigParallelModel = false;
-        boolean runWordEmbeddings = false;
-        boolean useTypeVectors = false;
-        boolean trainTypeVectors = false;
-        boolean findKeyPhrases = false;
-        double useTypeVectorsProb = 0.6;
-        Net2BoWType PPRenabled = Net2BoWType.OneWay;
-
-        int vectorSize = 200;
-        //vectorSize[0] = 200;
-//boolean runParametric = true;
-//
-//        try {
-//
-//            double[] temp = {0.3, 1.5, 0.4, 0.3};
-//            FTree tree = new FTree(temp);
-//
-//            int tmp = tree.sample(2.1 / tree.tree[1]);
-//            logger.info("FTree sample 2.1 (2):" + t);
-//
-//            double tmp2 = tree.getComponent(0);
-//            logger.info("FTree getComponent(0):" + tmp2);
-//
-//            tmp2 = tree.getComponent(3);
-//            logger.info("FTree getComponent(3):" + tmp2);
-//
-//            tree.update(2, 1.4);
-//
-//            tmp = tree.sample(3.19 /tree.tree[1]);
-//            logger.info("FTree sample 3.19 (2):" + tmp);
-//
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-
-        //String addedExpId = (experimentType == ExperimentType.ACM ? (ACMAuthorSimilarity ? "Author" : "Category") : "");
         String experimentId = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" + pruneCnt + "_" + pruneLblCnt + "PRN" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name() + "_" + experimentSubType; // + "_" + skewOn.toString();
+                + numIterations + "IT_" + numChars + "CHRs_" + pruneCnt + "_" + pruneLblCnt + "PRN" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
 
-        //experimentId = "HEALTHTender_400T_1000IT_6000CHRs_100B_2M_cos";
         String experimentDescription = experimentId + ": \n";
 
-        String SQLConnectionString = "";//"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
-        //File dictPath = null;
-
-        String dbFilename = "";
         String dictDir = "";
-        if (experimentType == ExperimentType.ACM) {
 
-            dbFilename = "PTMDB_ACM2016.db";
-            if (ubuntu) {
-                dictDir = ":/home/omiros/Projects/Datasets/ACM/";
-            } else {
-                dictDir = "C:\\projects\\Datasets\\ACM\\";
-            }
-        } else if (experimentType == ExperimentType.HEALTHTender) {
-            dbFilename = "PTM3DB_PM.db";
-            if (ubuntu) {
-                dictDir = ":/home/omiros/Projects/Datasets/PubMed/";
-            } else {
-                dictDir = "C:\\projects\\Datasets\\PubMed\\";
-            }
-        } else if (experimentType == ExperimentType.OAFullGrants) {
-            dbFilename = "PTMDB_OpenAIRE.db";
-            if (ubuntu) {
-                dictDir = ":/home/omiros/Projects/Datasets/OpenAIRE/";
-            } else {
-                dictDir = "C:\\projects\\Datasets\\OpenAIRE\\";
-            }
-        } else if (experimentType == ExperimentType.LFR) {
-            dbFilename = "LFRNet.db";
-            if (ubuntu) {
-                dictDir = ":/home/omiros/Projects/Datasets/OverlappingNets/";
-            } else {
-                dictDir = "C:\\Projects\\datasets\\OverlappingNets\\LFR\\100K\\NoNoise\\";
-            }
-        } else if (experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly) {
-            dbFilename = "DBLP4Areas.db";
-            if (ubuntu) {
-                dictDir = ":/home/omiros/Projects/Datasets/DBLP/";
-            } else {
-                dictDir = "C:\\Projects\\datasets\\DBLP\\";
-            }
-        }
-
-        //SQLConnectionString = "jdbc:sqlite:" + dictDir + dbFilename + "?journal_mode=WAL&synchronous=OFF";
-        SQLConnectionString = "jdbc:postgresql://localhost:5432/test?user=postgres&password=postgres&ssl=false";
-
-//        if (dictDir != "") {
-//            dictPath = new File(dictDir);
-//            dictPath.mkdir();
-//
-//        }
         Connection connection = null;
 
-        //FindGroundTruthCommunities(SQLConnectionString, experimentId);
-//        if (experimentType == ExperimentType.LFR) {
-//            FindGroundTruthCommunities(SQLConnectionString, experimentId);
-//        }
-        //createRefACMTables(SQLConnectionString);
-        // create a database connection
-        //Reader fileReader = new InputStreamReader(new FileInputStream(new File(args[0])), "UTF-8");
-        //instances.addThruPipe(new CsvIterator (fileReader, Pattern.compile("^(\\S*)[\\s,]*(\\S*)[\\s,]*(.*)$"),
-        //3, 2, 1)); // data, label, name fields
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
         }
@@ -209,7 +107,7 @@ public class PTMFlow {
             logger.info(" calc word embeddings starting");
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCnt,
                     pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars, PPRenabled,
-                    experimentSubType, experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
+                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
             logger.info(" instances added through pipe");
 
             //int numDimensions = 50;
@@ -229,24 +127,9 @@ public class PTMFlow {
 
         if (runTopicModelling) {
 
-            //Create vocabularies for the whole corpus
-            //search for file first
-            //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
-            //Alphabet[] alphabets = new Alphabet[numModalities];
-            //String outputDir = dictDir + experimentId;
-            //File outPath = new File(outputDir);
-            //outPath.mkdir();
-            //String stateFile = outputDir + File.separator + "output_state";
-            //String outputDocTopicsFile = outputDir + File.separator + "output_doc_topics.csv";
-            //String outputTopicPhraseXMLReport = outputDir + File.separator + "topicPhraseXMLReport.xml";
-            //String topicKeysFile = outputDir + File.separator + "output_topic_keys.csv";
-            //String topicWordWeightsFile = outputDir + File.separator + "topicWordWeightsFile.csv";
-            //String stateFileZip = outputDir + File.separator + "output_state.gz";
-            //String modelEvaluationFile = outputDir + File.separator + "model_evaluation.txt";
-            //String modelDiagnosticsFile = outputDir + File.separator + "model_diagnostics.xml";
             String batchId = "-1";
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCnt,
-                    pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars, PPRenabled, experimentSubType,
+                    pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars, PPRenabled,
                     experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
             logger.info(" instances added through pipe");
 
@@ -302,34 +185,17 @@ public class PTMFlow {
             //if (modelEvaluationFile != null) {
             try {
 
-//                ObjectOutputStream oos =
-//                        new ObjectOutputStream(new FileOutputStream(modelEvaluationFile));
-//                oos.writeObject(model.getProbEstimator());
-//                oos.close();
-//                
-                //PrintStream docProbabilityStream = null;
-                //docProbabilityStream = new PrintStream(modelEvaluationFile);
-//TODO...
                 double perplexity = 0;
-//                        if (splitCorpus) {
-//                            perplexity = model.getProbEstimator().evaluateLeftToRight(testInstances[0], 10, false, docProbabilityStream);
-//                        }
-                //  System.out.println("perplexity for the test set=" + perplexity);
-                //logger.info("perplexity calculation finished");
-                //iMixLDATopicModelDiagnostics diagnostics = new iMixLDATopicModelDiagnostics(model, topWords);
-                //MixLDATopicModelDiagnostics diagnostics = new MixLDATopicModelDiagnostics(model, topWords);
 
                 FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, topWords);
                 diagnostics.saveToDB(SQLConnectionString, experimentId, perplexity, batchId);
                 logger.info("full diagnostics calculation finished");
 
             } catch (Exception e) {
+
                 System.err.println(e.getMessage());
             }
 
-            //  }
-            //eee
-            //    }
             experimentDescription = "Multi View Topic Modeling Analysis on ACM corpus";
             model.saveExperiment(SQLConnectionString, experimentId, experimentDescription);
 
@@ -337,15 +203,9 @@ public class PTMFlow {
                 FindGroundTruthCommunities(SQLConnectionString, experimentId);
             }
 
-//                PrintWriter outXMLPhrase = new PrintWriter(new FileWriter((new File(outputTopicPhraseXMLReport))));
-//                model.topicPhraseXMLReport(outXMLPhrase, topWords);
-//                outXMLPhrase.close();
-//                logger.info("topicPhraseXML report finished");
             logger.info("Insert default topic descriptions");
 
             try {
-                // create a database connection
-                //connection = DriverManager.getConnection(SQLConnectionString);
 
                 String insertTopicDescriptionSql = "INSERT into TopicDescription (Title, Category, TopicId , VisibilityIndex, ExperimentId )\n"
                         + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
@@ -389,76 +249,98 @@ public class PTMFlow {
             calcPPRSimilarities(SQLConnectionString);
         }
 
-//        if (modelDiagnosticsFile
-//                != null) {
-//            PrintWriter out = new PrintWriter(modelDiagnosticsFile);
-//            MixTopicModelDiagnostics diagnostics = new MixTopicModelDiagnostics(model, topWords, perplexity);
-//            diagnostics.saveToDB(SQLConnectionString, experimentId);
-//            out.println(diagnostics.toXML()); //preferable than XML???
-//            out.close();
+    }
+
+    public void getPropValues() throws IOException {
+
+
+        InputStream inputStream = null;
+        try {
+            Properties prop = new Properties();
+            String propFileName = "config.properties";
+
+            inputStream = getClass().getClassLoader().getResourceAsStream(propFileName);
+
+            if (inputStream != null) {
+                prop.load(inputStream);
+            } else {
+                throw new FileNotFoundException("property file '" + propFileName + "' not found in the classpath");
+            }
+
+            // get the property value and print it out
+            
+            String user = prop.getProperty("user");
+            String company1 = prop.getProperty("company1");
+            String company2 = prop.getProperty("company2");
+            String company3 = prop.getProperty("company3");
+
+            
+            
+        } catch (Exception e) {
+            System.out.println("Exception: " + e);
+        } finally {
+            inputStream.close();
+        }
+        
+    }
+
+//    private void writeProperties() {
+//        Properties prop = new Properties();
+//        OutputStream output = null;
+//
+//        try {
+//
+//            String propFileName = "config.properties";
+//
+//            output = getClass().getClassLoader().getResourceAsStream(propFileName);
+//
+//            if (inputStream != null) {
+//                prop.load(inputStream);
+//            } else {
+//                throw new FileNotFoundException("property file '" + propFileName + "' not found in the classpath");
+//            }
+//            
+//            output = new FileOutputStream("config.properties");
+//            
+//            
+//            // set the properties value
+//            prop.setProperty("topWords", String.valueOf(topWords));
+//            prop.setProperty("SQLConnectionString", SQLConnectionString);
+//            prop.setProperty("showTopicsInterval", String.valueOf(showTopicsInterval));
+//            prop.setProperty("numModalities", numModalities);
+//            prop.setProperty("numOfThreads", numOfThreads);
+//            prop.setProperty("numTopics", numTopics);
+//            prop.setProperty("numIterations", numIterations);
+//            prop.setProperty("numChars", numChars);
+//            prop.setProperty("burnIn", burnIn);
+//            prop.setProperty("optimizeInterval", optimizeInterval);
+//            prop.setProperty("experimentType", experimentType);
+//            prop.setProperty("pruneCnt", pruneCnt);
+//            prop.setProperty("pruneLblCnt", pruneLblCnt);
+//            prop.setProperty("pruneMaxPerc", pruneMaxPerc);
+//            prop.setProperty("pruneMinPerc", pruneMinPerc);
+//            prop.setProperty("calcEntitySimilarities", calcEntitySimilarities);
+//            prop.setProperty("runTopicModelling", runTopicModelling);
+//            prop.setProperty("findKeyPhrases", findKeyPhrases);
+//            prop.setProperty("PPRenabled", PPRenabled);
+//           
+//
+//            // save properties to project root folder
+//            prop.store(output, null);
+//
+//        } catch (IOException io) {
+//            io.printStackTrace();
+//        } finally {
+//            if (output != null) {
+//                try {
+//                    output.close();
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//
 //        }
-        //If any value in <tt>p2</tt> is <tt>0.0</tt> then the KL-divergence
-        //double a = Maths.klDivergence();
-        //model.printTypeTopicCounts(new File (wordTopicCountsFile.value));
-        // Show the words and topics in the first instance
-        // The data alphabet maps word IDs to strings
-        /*   Alphabet dataAlphabet = instances.getDataAlphabet();
-
-         FeatureSequence tokens = (FeatureSequence) model.getData().get(0).instance.getData();
-         LabelSequence topics = model.getData().get(0).topicSequence;
-
-         Formatter out = new Formatter(new StringBuilder(), Locale.US);
-         for (int posit= 0; position < tokens.getLength(); position++) {
-         out.format("%s-%d ", dataAlphabet.lookupObject(tokens.getIndexAtPosition(position)), topics.getIndexAtPosition(position));
-         }
-         System.out.println(out);
-
-         // Estimate the topic distribution of the first instance, 
-         //  given the current Gibbs state.
-         double[] topicDistribution = model.getTopicProbabilities(0);
-
-         // Get an array of sorted sets of word ID/count pairs
-         ArrayList<TreeSet<IDSorter>> topicSortedWords = model.getSortedWords();
-
-         // Show top 5 words in topics with proportions for the first document
-         for (int topic = 0; topic < numTopics; topic++) {
-         Iterator<IDSorter> iterator = topicSortedWords.get(topic).iterator();
-
-         out = new Formatter(new StringBuilder(), Locale.US);
-         out.format("%d\t%.3f\t", topic, topicDistribution[topic]);
-         int rank = 0;
-         while (iterator.hasNext() && rank < 5) {
-         IDSorter idCountPair = iterator.next();
-         out.format("%s (%.0f) ", dataAlphabet.lookupObject(idCountPair.getID()), idCountPair.getWeight());
-         rank++;
-         }
-         System.out.println(out);
-         }
-
-         // Create a new instance with high probability of topic 0
-         StringBuilder topicZeroText = new StringBuilder();
-         Iterator<IDSorter> iterator = topicSortedWords.get(0).iterator();
-
-         int rank = 0;
-         while (iterator.hasNext() && rank < 5) {
-         IDSorter idCountPair = iterator.next();
-         topicZeroText.append(dataAlphabet.lookupObject(idCountPair.getID()) + " ");
-         rank++;
-         }
-
-         // Create a new instance named "test instance" with empty target and source fields.
-         InstanceList testing = new InstanceList(instances.getPipe());
-         testing.addThruPipe(new Instance(topicZeroText.toString(), null, "test instance", null));
-
-         TopicInferencer inferencer = model.getInferencer();
-         double[] testProbabilities = inferencer.getSampledDistribution(testing.get(0), 10, 1, 5);
-         System.out.println("0\t" + testProbabilities[0]);
-         */
-    }
-
-    private void SaveTopKTokensPerEntity(int K, boolean TfIDFweighting, InstanceList instances) {
-
-    }
+//    }
 
     private void FindKeyPhrasesPerTopic(String SQLLiteDB, String experimentId, String tagger) {
         //for default lexicon POS tags
@@ -832,31 +714,6 @@ public class PTMFlow {
 //        }
     }
 
-    private void outputCsvFiles(String outputDir, Boolean htmlOutputFlag, String inputDir, int numTopics, String stateFile, String outputDocTopicsFile, String topicKeysFile) {
-
-        CsvBuilder cb = new CsvBuilder();
-        cb.createCsvFiles(numTopics, outputDir, stateFile, outputDocTopicsFile, topicKeysFile);
-
-        if (htmlOutputFlag) {
-            HtmlBuilder hb = new HtmlBuilder(cb.getNtd(), new File(inputDir));
-            hb.createHtmlFiles(new File(outputDir));
-        }
-        //clearExtrafiles(outputDir);
-    }
-
-    private void clearExtrafiles(String outputDir) {
-        String[] fileNames = {"topic-input.mallet", "output_topic_keys.csv", "output_state.gz",
-            "output_doc_topics.csv", "output_state"};
-        for (String f : fileNames) {
-            if (!(new File(outputDir, f).canWrite())) {
-                System.out.println(f);
-            }
-            Boolean b = new File(outputDir, f).delete();
-
-        }
-
-    }
-
     public void createCitationGraphFile(String outputCsv, String SQLLitedb) {
         //String SQLConnectionString = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
 
@@ -1052,11 +909,6 @@ public class PTMFlow {
 
             logger.info("PPRSimilarities calculation Started");
 
-            // statement.executeUpdate("drop table if exists person");
-//      statement.executeUpdate("create table person (id integer, name string)");
-//      statement.executeUpdate("insert into person values(1, 'leo')");
-//      statement.executeUpdate("insert into person values(2, 'yui')");
-//      ResultSet rs = statement.executeQuery("select * from person");
             String sql = "SELECT source.OrigId||'PPR' AS PubID, target.OrigId  AS CitationId, prLinks.Counts As Counts FROM prLinks\n"
                     + "INNER JOIN PubCitationPPRAlias source ON source.RowId = PrLinks.Source\n"
                     + "INNER JOIN PubCitationPPRAlias target ON target.RowId = PrLinks.Target\n"
@@ -1180,11 +1032,6 @@ public class PTMFlow {
 
             logger.info("PPRSimilarities calculation Started");
 
-            // statement.executeUpdate("drop table if exists person");
-//      statement.executeUpdate("create table person (id integer, name string)");
-//      statement.executeUpdate("insert into person values(1, 'leo')");
-//      statement.executeUpdate("insert into person values(2, 'yui')");
-//      ResultSet rs = statement.executeQuery("select * from person");
             String sql = "select TopicId||'EXP' as GroupId, PubId as NodeId from PubTopic\n"
                     + "WHERE ExperimentId = '" + experimentId + "'\n"
                     + "UNION \n"
@@ -1315,11 +1162,6 @@ public class PTMFlow {
 
             logger.info("similarities calculation Started");
 
-            // statement.executeUpdate("drop table if exists person");
-//      statement.executeUpdate("create table person (id integer, name string)");
-//      statement.executeUpdate("insert into person values(1, 'leo')");
-//      statement.executeUpdate("insert into person values(2, 'yui')");
-//      ResultSet rs = statement.executeQuery("select * from person");
             String sql = "";
             switch (experimentType) {
 //                case Grants:
@@ -1387,13 +1229,6 @@ public class PTMFlow {
                                 + "                                                          and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n"
                                 + "                                                          where topicdescription.experimentId='" + experimentId + "' and topicdescription.VisibilityIndex=1)";
                     }
-                    //else {
-//                        sql = "select    PubACMCategory.CatId as Category, TopicId, AVG(weight) as Weight from PubTopic \n"
-//                                + "Inner Join PubACMCategory on PubTopic.PubId= PubACMCategory.PubId  \n"
-//                                + "INNER JOIN (Select CatId FROM PubACMCategory \n"
-//                                + "GROUP BY CatId HAVING Count(*)>10) catCnts1 ON catCnts1.CatId = PubACMCategory.catId\n"
-//                                + "where weight>0.02 AND ExperimentId='" + experimentId + "' group By PubACMCategory.CatId , TopicId order by  PubACMCategory.CatId, Weight desc, TopicId";
-//                    }
 
                     break;
 //                case PM_pdb:
@@ -1570,7 +1405,7 @@ public class PTMFlow {
     }
 
     public InstanceList[] GenerateAlphabets(String SQLLitedb, ExperimentType experimentType, String dictDir, byte numModalities,
-            int pruneCnt, int pruneLblCnt, double pruneMaxPerc, double pruneMinPerc, int numChars, Net2BoWType PPRenabled, String experimentSubType, boolean ignoreText) {
+            int pruneCnt, int pruneLblCnt, double pruneMaxPerc, double pruneMinPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText) {
 
         //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
         // Begin by importing documents from text to feature sequences
@@ -1661,11 +1496,7 @@ public class PTMFlow {
 
                 while (rs.next()) {
                     // read the result set
-                    //String lblStr = "[" + rs.getString("GrantIds") + "]" ;//+ rs.getString("text");
-                    //String str = "[" + rs.getString("GrantIds") + "]" + rs.getString("text");
-                    //System.out.println("name = " + rs.getString("file"));
-                    //System.out.println("name = " + rs.getString("fundings"));
-                    //int cnt = rs.getInt("grantsCnt");
+
                     switch (experimentType) {
 
                         case ACM:

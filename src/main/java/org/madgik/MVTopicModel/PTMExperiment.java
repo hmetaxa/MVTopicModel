@@ -69,7 +69,7 @@ public class PTMExperiment {
         int topWords = 20;
         int showTopicsInterval = 50;
         //int topLabels = 10;p
-        byte numModalities = 6;
+        byte numModalities = 3;
 
         //int numIndependentTopics = 0;
         double docTopicsThreshold = 0.03;
@@ -81,17 +81,17 @@ public class PTMExperiment {
         int numOfThreads = 4;
         //iMixParallelTopicModel.SkewType skewOn = iMixParallelTopicModel.SkewType.None;
         //boolean ignoreSkewness = true;
-        int numTopics = 400;
+        int numTopics = 4;
         //int maxNumTopics = 500;
-        int numIterations = 900; //Max 2000
+        int numIterations = 200; //Max 2000
         int numChars = 4000;
         //int independentIterations = 0;
         int burnIn = 50;
         int optimizeInterval = 20;
-        ExperimentType experimentType = ExperimentType.ACM;
+        ExperimentType experimentType = ExperimentType.DBLP;
         String experimentSubType = "";
-        int pruneCnt = 300; //Red,,,,,,,,,,,,,,,,,,,,,,,,,uce features to those that occur more than N times
-        int pruneLblCnt = 25;
+        int pruneCnt = 200; //Red,,,,,,,,,,,,,,,,,,,,,,,,,uce features to those that occur more than N times
+        int pruneLblCnt = 0;
         double pruneMaxPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
         double pruneMinPerc = 0.05;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
@@ -101,12 +101,12 @@ public class PTMExperiment {
         boolean calcEntitySimilarities = false;
         boolean calcTopicSimilarities = false;
         boolean calcPPRSimilarities = false;
-        boolean runTopicModelling = false;
+        boolean runTopicModelling = true;
         boolean runOrigParallelModel = false;
         boolean runWordEmbeddings = false;
         boolean useTypeVectors = false;
         boolean trainTypeVectors = false;
-        boolean findKeyPhrases = true;
+        boolean findKeyPhrases = false;
         double useTypeVectorsProb = 0.6;
         Net2BoWType PPRenabled = Net2BoWType.PPR;
 
