@@ -1,13 +1,10 @@
 package org.madgik.MVTopicModel;
 
-import org.madgik.utils.CsvBuilder;
-import org.madgik.utils.HtmlBuilder;
-
 import cc.mallet.util.*;
 
 import cc.mallet.types.*;
 import cc.mallet.pipe.*;
-//import cc.mallet.types.InstanceList;
+//import cc.mallet.types.InstanceList;  
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
@@ -21,7 +18,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.logging.Logger;
+import org.apache.log4j.Logger;
 
 import org.madgik.utils.CSV2FeatureSequence;
 import org.madgik.utils.FeatureSequenceRemovePlural;
@@ -32,7 +29,7 @@ public class PTMFlow {
     public enum ExperimentType {
 
         ACM,
-        OAFullGrants,
+        OpenAIRE,
         OAFETGrants,
         HEALTHTender,
         LFR,
@@ -54,8 +51,8 @@ public class PTMFlow {
         PPR
     }
 
-    public static Logger logger = MalletLogger.getLogger(PTMFlow.class.getName());
-
+    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
+    
     int topWords = 20;
     int showTopicsInterval = 50;
     byte numModalities = 6;
@@ -67,7 +64,7 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.ACM;
+    ExperimentType experimentType = ExperimentType.OpenAIRE;
     int pruneCnt = 300;
     int pruneLblCnt = 25;
     double pruneMaxPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
@@ -84,7 +81,7 @@ public class PTMFlow {
     double useTypeVectorsProb = 0.6;
     Net2BoWType PPRenabled = Net2BoWType.OneWay;
     int vectorSize = 200;
-    String SQLConnectionString = "jdbc:postgresql://localhost:5432/test?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
+    String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
 
     public PTMFlow() throws IOException {
 
@@ -98,6 +95,8 @@ public class PTMFlow {
         String dictDir = "";
 
         Connection connection = null;
+
+        getPropValues();
 
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
@@ -253,7 +252,6 @@ public class PTMFlow {
 
     public void getPropValues() throws IOException {
 
-
         InputStream inputStream = null;
         try {
             Properties prop = new Properties();
@@ -268,20 +266,24 @@ public class PTMFlow {
             }
 
             // get the property value and print it out
-            
-            String user = prop.getProperty("user");
-            String company1 = prop.getProperty("company1");
-            String company2 = prop.getProperty("company2");
-            String company3 = prop.getProperty("company3");
+            numTopics = Integer.parseInt(prop.getProperty("TopicsNumber"));
+            topWords = Integer.parseInt(prop.getProperty("TopWords"));
+            numModalities = Byte.parseByte(prop.getProperty("NumModalities"));
+            numIterations = Integer.parseInt(prop.getProperty("Iterations"));
+            numOfThreads = Integer.parseInt(prop.getProperty("NumOfThreads"));
+            numChars = Integer.parseInt(prop.getProperty("NumOfChars"));
+            burnIn = Integer.parseInt(prop.getProperty("BurnIn"));
+            optimizeInterval = Integer.parseInt(prop.getProperty("OptimizeInterval"));
+            pruneCnt = Integer.parseInt(prop.getProperty("PruneCnt"));
+            pruneLblCnt = Integer.parseInt(prop.getProperty("PruneLblCnt"));
+            SQLConnectionString = prop.getProperty("SQLConnectionString");
 
-            
-            
         } catch (Exception e) {
             System.out.println("Exception: " + e);
         } finally {
             inputStream.close();
         }
-        
+
     }
 
 //    private void writeProperties() {
@@ -341,8 +343,7 @@ public class PTMFlow {
 //
 //        }
 //    }
-
-    private void FindKeyPhrasesPerTopic(String SQLLiteDB, String experimentId, String tagger) {
+    private void FindKeyPhrasesPerTopic(String SQLConnection, String experimentId, String tagger) {
         //for default lexicon POS tags
         //Configuration.setTaggerType("default"); 
         if (tagger == "openNLP") {
@@ -373,7 +374,7 @@ public class PTMFlow {
         try {
             // create a database connection
             //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLLiteDB);
+            connection = DriverManager.getConnection(SQLConnection);
             Statement statement = connection.createStatement();
             statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
@@ -483,7 +484,7 @@ public class PTMFlow {
 
     }
 
-    private void TfIdfWeighting(InstanceList instances, String SQLLiteDB, String experimentId, int itemType) {
+    private void TfIdfWeighting(InstanceList instances, String SQLConnection, String experimentId, int itemType) {
 
         int N = instances.size();
 
@@ -524,8 +525,8 @@ public class PTMFlow {
 
         try {
             // create a database connection
-            if (!SQLLiteDB.isEmpty()) {
-                connection = DriverManager.getConnection(SQLLiteDB);
+            if (!SQLConnection.isEmpty()) {
+                connection = DriverManager.getConnection(SQLConnection);
                 statement = connection.createStatement();
                 statement.setQueryTimeout(30);  // set timeout to 30 sec.
                 statement.executeUpdate("create table if not exists TokensPerEntity (EntityId nvarchar(100), ItemType int, Token nvarchar(100), Counts double, TFIDFCounts double, ExperimentId nvarchar(50)) ");
@@ -1181,7 +1182,7 @@ public class PTMFlow {
 //                            + "' group By project_code , TopicId order by  project_code, TopicId";
 //
 //                    break;
-                case OAFullGrants:
+                case OpenAIRE:
                 case HEALTHTender:
                     sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
                             + "                            from EntityTopicDistribution\n"
@@ -1266,7 +1267,7 @@ public class PTMFlow {
 
                 switch (experimentType) {
 
-                    case OAFullGrants:
+                    case OpenAIRE:
                     case OAFETGrants:
                     case HEALTHTender:
                         newLabelId = rs.getString("projectId");
@@ -1404,7 +1405,7 @@ public class PTMFlow {
         logger.info("similarities calculation finished");
     }
 
-    public InstanceList[] GenerateAlphabets(String SQLLitedb, ExperimentType experimentType, String dictDir, byte numModalities,
+    public InstanceList[] GenerateAlphabets(String SQLConnection, ExperimentType experimentType, String dictDir, byte numModalities,
             int pruneCnt, int pruneLblCnt, double pruneMaxPerc, double pruneMinPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText) {
 
         //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
@@ -1450,22 +1451,24 @@ public class PTMFlow {
         Connection connection = null;
         try {
 
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnection);
             connection.setAutoCommit(false);
 
             String sql = "";
             String txtsql = "";
 
-            if (experimentType == ExperimentType.ACM) {
+            if (experimentType == ExperimentType.ACM || experimentType == ExperimentType.OpenAIRE) {
 
-                txtsql = "select pubId, text, fulltext from acmpubviewtxt ";
+                txtsql = "select pubId, text, fulltext from pubviewtxt ";
                 if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from ACMPubView  ";
+                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  ";
                 } else if (PPRenabled == Net2BoWType.OneWay) {
-                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from acmpubviewoneway ";
+                    sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from pubviewsideinfo";
+                    //sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway ";
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from ACMPubViewTwoWay";
+                    sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from pubviewsideinfo";
                 }
+                sql = " select   pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewsideinfo";
 
             }
 
@@ -1477,13 +1480,16 @@ public class PTMFlow {
 
             while (rstxt.next()) {
 
+                String txt = "";
                 switch (experimentType) {
 
                     case ACM:
-                        String txt = rstxt.getString("text");
+                    case OpenAIRE:
+                        txt = rstxt.getString("text");
                         instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("pubId"), "text"));
 
                         break;
+
                     default:
                 }
             }
@@ -1583,6 +1589,67 @@ public class PTMFlow {
                                 if (tmpPeriod != null && !tmpPeriod.equals("")) {
 
                                     instanceBuffer.get(7).add(new Instance(tmpPeriod, null, rs.getString("pubId"), "period"));
+                                }
+                            }
+
+                            break;
+                        case OpenAIRE:
+
+                            if (numModalities > 1) {
+                                String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
+                                if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
+                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("pubId"), "Keywords"));
+                                }
+                            }
+
+                            if (numModalities > 2) {
+                                String tmpStr = rs.getString("Citations");//.replace("\t", ",");
+                                String citationStr = "";
+                                if (tmpStr != null && !tmpStr.equals("")) {
+                                    String[] citations = tmpStr.trim().split(",");
+                                    for (int j = 0; j < citations.length; j++) {
+                                        String[] pairs = citations[j].trim().split(":");
+                                        if (pairs.length == 2) {
+                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
+                                                citationStr += pairs[0] + ",";
+                                            }
+                                        } else {
+                                            citationStr += citations[j] + ",";
+
+                                        }
+                                    }
+                                    citationStr = citationStr.substring(0, citationStr.length() - 1);
+                                    instanceBuffer.get(2).add(new Instance(citationStr, null, rs.getString("pubId"), "citation"));
+                                }
+                            }
+
+//DBPediaResources
+                            if (numModalities > 3) {
+                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
+                                String DBPediaResourceStr = "";
+                                if (tmpStr != null && !tmpStr.equals("")) {
+                                    String[] DBPediaResources = tmpStr.trim().split(",");
+                                    for (int j = 0; j < DBPediaResources.length; j++) {
+                                        String[] pairs = DBPediaResources[j].trim().split(";");
+                                        if (pairs.length == 2) {
+                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
+                                                DBPediaResourceStr += pairs[0] + ",";
+                                            }
+                                        } else {
+                                            DBPediaResourceStr += DBPediaResources[j] + ",";
+
+                                        }
+                                    }
+                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
+                                    instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
+                                }
+                            }
+
+                            if (numModalities > 4) {
+                                String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
+                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
+
+                                    instanceBuffer.get(4).add(new Instance(tmpAuthorsStr, null, rs.getString("pubId"), "Venue"));
                                 }
                             }
 

@@ -34,11 +34,11 @@ import org.json.JSONObject;
 public class DBpediaAnnotator {
 
     public enum ExperimentType {
-
+        OpenAIRE,
         ACM,
         OAFullGrants,
         OAFETGrants,
-        HEALTHTender,
+        Tender,
         LFR
     }
 
@@ -62,12 +62,12 @@ public class DBpediaAnnotator {
             } else {
                 dictDir = "C:\\projects\\Datasets\\ACM\\";
             }
-        } else if (experimentType == ExperimentType.HEALTHTender) {
-            dbFilename = "PTM3DB_PM.db";
+        } else if (experimentType == ExperimentType.Tender) {
+            dbFilename = "PTM_Tender.db";
             if (ubuntu) {
                 dictDir = ":/home/omiros/Projects/Datasets/PubMed/";
             } else {
-                dictDir = "C:\\projects\\Datasets\\PubMed\\";
+                dictDir = "C:\\projects\\Datasets\\Tender\\";
             }
         } else if (experimentType == ExperimentType.OAFullGrants) {
             dbFilename = "PTMDB_OpenAIRE.db";
@@ -86,6 +86,8 @@ public class DBpediaAnnotator {
         }
 
         SQLLitedb = "jdbc:sqlite:" + dictDir + dbFilename;
+        SQLLitedb = "jdbc:postgresql://localhost:5432/Tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
+        
 
         return SQLLitedb;
     }
@@ -173,6 +175,8 @@ public class DBpediaAnnotator {
             executor.submit(runnables[thread]);
 
         }
+        
+        executor.shutdown();
 
     }
 
@@ -204,11 +208,15 @@ public class DBpediaAnnotator {
                         + " AND Publication.PubId NOT IN (select distinct pubId from pubdbpediaresource) \n"
                         + "     GROUP BY Publication.pubId\n" //+"     Limit 1000"
                         ;
-            } else if (experimentType == ExperimentType.HEALTHTender) {
-                sql = " select pubId, TEXT, GrantIds, Funders, Areas, AreasDescr, Venue, MESHdescriptors from HEALTHPubView";// LIMIT 100000";
+            } else if (experimentType == ExperimentType.Tender) {
+                sql = " select pubId, TEXT, keywords, Grants from PubView WHERE  PubView.PubId NOT IN (select distinct pubId from pubdbpediaresource)";// LIMIT 100000";
             } else if (experimentType == ExperimentType.OAFullGrants) {
                 sql = " select pubId, TEXT, GrantIds, Funders, Areas, AreasDescr, Venue from OpenAIREPubView";// LIMIT 100000";
             }
+            else if (experimentType == ExperimentType.OpenAIRE) {
+                sql = "select pubId, text, fulltext, keywords from pubview limit 10";// LIMIT 100000";
+            }
+            
 
             Statement statement = connection.createStatement();
             statement.setQueryTimeout(60);  // set timeout to 30 sec.
@@ -271,14 +279,16 @@ public class DBpediaAnnotator {
 
         }
 
+        executor.shutdown();
     }
 
     public static void main(String[] args) throws Exception {
 
-        Class.forName("org.sqlite.JDBC");
+        //Class.forName("org.sqlite.JDBC");
+        Class.forName("org.postgresql.Driver");
         DBpediaAnnotator c = new DBpediaAnnotator();
-        //c.annotatePubs(ExperimentType.ACM, AnnotatorType.spotlight, 5);
-        c.updateResourceDetails(ExperimentType.ACM, 4);
+        c.annotatePubs(ExperimentType.OpenAIRE, AnnotatorType.spotlight, 2);
+        c.updateResourceDetails(ExperimentType.Tender, 2);
 
     }
 }

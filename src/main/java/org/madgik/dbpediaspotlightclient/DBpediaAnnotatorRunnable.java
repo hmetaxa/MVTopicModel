@@ -197,7 +197,9 @@ public class DBpediaAnnotatorRunnable implements Runnable {
     public List<DBpediaResource> extractFromSpotlight(String input) throws Exception {
 
         //private final static String API_URL = "http://localhost:2222/rest/candidates";
-        final String API_URL = "http://localhost:2222/rest/annotate";
+        //final String API_URL = "http://localhost:2222/rest/annotate";
+        final String API_URL = "http://model.dbpedia-spotlight.org/en/annotate";
+        //http://model.dbpedia-spotlight.org/en/annotate
         //private final static String API_URL = "http://www.dbpedia-spotlight.com/en/annotate";
         //private final static String API_URL = "http://spotlight.sztaki.hu:2222/rest/annotate";
         final double CONFIDENCE = 0.4;
@@ -339,6 +341,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 pubText pub = pubs.get(doc);
                 List<DBpediaResource> entities = getDBpediaEntities(pub.getText(), annotator, doc - startDoc);
                 saveDBpediaEntities(SQLLitedb, entities, pub.getPubId(), annotator);
+                
             }
         } else if (resources != null) {
             for (int resource = startDoc;
@@ -411,8 +414,18 @@ public class DBpediaAnnotatorRunnable implements Runnable {
     Confidence DOUBLE,
     Annotator  TEXT,
              */
-            String insertSql = "insert or replace into pubDBpediaResource (pubId, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?, \n"
-                    + "    ifnull((select count from pubDBpediaResource where pubId = ? and Resource=? and mention=?), 0) + 1);";
+            
+//          SQLite  String insertSql = "insert into pubDBpediaResource (pubId, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?, \n"
+//                    + "    ifnull((select count from pubDBpediaResource where pubId = ? and Resource=? and mention=?), 0) + 1)";
+//         
+            
+            String insertSql ="insert into pubDBpediaResource (pubId, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?,0)\n" +
+"ON CONFLICT (pubId, resource,mention) DO UPDATE SET \n" +
+"support=EXCLUDED.Support,\n" +
+"similarity=EXCLUDED.similarity, \n" +
+" confidence=EXCLUDED.confidence, \n" +
+" annotator=EXCLUDED.annotator, \n" +
+" count=pubDBpediaResource.count+1";
 
             try {
 
@@ -430,9 +443,9 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                     bulkInsert.setDouble(6, e.getConfidence());
                     bulkInsert.setString(7, annotator.name());
 
-                    bulkInsert.setString(8, pubId);
-                    bulkInsert.setString(9, resource);
-                    bulkInsert.setString(10, e.getMention());
+                    //SQlite bulkInsert.setString(8, pubId);
+                    //SQlite bulkInsert.setString(9, resource);
+                    //SQlite bulkInsert.setString(10, e.getMention());
 
                     bulkInsert.executeUpdate();
 
@@ -491,7 +504,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
             //INSERT OR IGNORE INTO EVENTTYPE (EventTypeName) VALUES 'ANI Received'
             //statement.executeUpdate(String.format("Update pubDBpediaResource Set abstract='%s' where URI='%s'", resourceAbstract, URI));
-            String myStatement = " insert or ignore into DBpediaResource (Id, URI, label, wikiId, abstract) Values (?, ?, ?, ?, ?) ";
+            //SQLITE String myStatement = " insert or ignore into DBpediaResource (Id, URI, label, wikiId, abstract) Values (?, ?, ?, ?, ?) ";
+            String myStatement = " insert into DBpediaResource (Id, URI, label, wikiId, abstract) Values (?, ?, ?, ?, ?) ON CONFLICT (Id) DO NOTHING ";
             PreparedStatement statement = connection.prepareStatement(myStatement);
             statement.setQueryTimeout(30);  // set timeout to 30 sec.   
             String id = resource.getLink().uri.isEmpty() ? resource.getLink().label : resource.getLink().uri;
@@ -629,7 +643,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 i++;
                 txt2Annotate += (" " + s);
 
-                if ((i % 1) == 0 || i == txts.length) {
+                if ((i % 5) == 0 || i == txts.length) {
                     txt2AnnotatNum++;
 
                     try {

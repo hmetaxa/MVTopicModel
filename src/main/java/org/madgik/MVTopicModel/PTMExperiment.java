@@ -41,7 +41,7 @@ public class PTMExperiment {
         ACM,
         OAFullGrants,
         OAFETGrants,
-        HEALTHTender,
+        Tender,
         LFR,
         DBLP,
         DBLPNetOnly
@@ -69,7 +69,7 @@ public class PTMExperiment {
         int topWords = 20;
         int showTopicsInterval = 50;
         //int topLabels = 10;p
-        byte numModalities = 3;
+        
 
         //int numIndependentTopics = 0;
         double docTopicsThreshold = 0.03;
@@ -78,22 +78,23 @@ public class PTMExperiment {
         //boolean runOnLine = false;
 
         //boolean calcTokensPerEntity = true;
-        int numOfThreads = 4;
+        int numOfThreads = 2;
         //iMixParallelTopicModel.SkewType skewOn = iMixParallelTopicModel.SkewType.None;
         //boolean ignoreSkewness = true;
-        int numTopics = 4;
+        byte numModalities = 2;
+        int numTopics = 6;
         //int maxNumTopics = 500;
-        int numIterations = 200; //Max 2000
-        int numChars = 4000;
+        int numIterations = 700; //Max 2000
+        int numChars = 20000;
         //int independentIterations = 0;
         int burnIn = 50;
         int optimizeInterval = 20;
-        ExperimentType experimentType = ExperimentType.DBLP;
+        ExperimentType experimentType = ExperimentType.Tender;
         String experimentSubType = "";
-        int pruneCnt = 200; //Red,,,,,,,,,,,,,,,,,,,,,,,,,uce features to those that occur more than N times
-        int pruneLblCnt = 0;
+        int pruneCnt = 20; //Red,,,,,,,,,,,,,,,,,,,,,,,,,uce features to those that occur more than N times
+        int pruneLblCnt = 4;
         double pruneMaxPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
-        double pruneMinPerc = 0.05;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
+        double pruneMinPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
         boolean ACMAuthorSimilarity = true;
         boolean ubuntu = false;
@@ -156,12 +157,12 @@ public class PTMExperiment {
             } else {
                 dictDir = "C:\\projects\\Datasets\\ACM\\";
             }
-        } else if (experimentType == ExperimentType.HEALTHTender) {
-            dbFilename = "PTM3DB_PM.db";
+        } else if (experimentType == ExperimentType.Tender) {
+            dbFilename = "PTM_Tender.db";
             if (ubuntu) {
                 dictDir = ":/home/omiros/Projects/Datasets/PubMed/";
             } else {
-                dictDir = "C:\\projects\\Datasets\\PubMed\\";
+                dictDir = "C:\\projects\\Datasets\\Tender\\";
             }
         } else if (experimentType == ExperimentType.OAFullGrants) {
             dbFilename = "PTMDB_OpenAIRE.db";
@@ -1362,7 +1363,7 @@ public class PTMExperiment {
 //
 //                    break;
                 case OAFullGrants:
-                case HEALTHTender:
+                case Tender:
                     sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
                             + "                            from EntityTopicDistribution\n"
                             + "                            where EntityTopicDistribution.EntityType='Grant' AND EntityTopicDistribution.EntityId<>'' AND\n"
@@ -1455,7 +1456,7 @@ public class PTMExperiment {
 
                     case OAFullGrants:
                     case OAFETGrants:
-                    case HEALTHTender:
+                    case Tender:
                         newLabelId = rs.getString("projectId");
                         break;
 
@@ -1649,14 +1650,14 @@ public class PTMExperiment {
                     sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from ACMPubViewTwoWay";
                 }
 
-            } else if (experimentType == ExperimentType.HEALTHTender) {
+            } else if (experimentType == ExperimentType.Tender) {
 
-                sql = " select pubId, TEXT, GrantIds, Funders, Areas, AreasDescr, Venue, MESHdescriptors from HEALTHPubView";// LIMIT 100000";
-                if (experimentSubType == "PM") {
-                    sql = "select pubId, TEXT,  Funders, Venue, MESHdescriptors from HEALTHPubView_PM";
-                } else if (experimentSubType == "MT") {
-                    sql = " select pubId, TEXT,  Funders, Venue, MESHdescriptors from HEALTHPubView_MT";
-                }
+                sql = "select  pubId, text, grants, keywords, DBPediaResources from PubView";// LIMIT 100000";
+//                if (experimentSubType == "PM") {
+//                    sql = "select pubId, TEXT,  Funders, Venue, MESHdescriptors from HEALTHPubView_PM";
+//                } else if (experimentSubType == "MT") {
+//                    sql = " select pubId, TEXT,  Funders, Venue, MESHdescriptors from HEALTHPubView_MT";
+//                }
             } else if (experimentType == ExperimentType.OAFullGrants) {
 
                 sql = " select pubId, TEXT, GrantIds, Funders, Areas, AreasDescr, Venue from OpenAIREPubView";// LIMIT 100000";
@@ -1817,46 +1818,28 @@ public class PTMExperiment {
                         ;
                         break;
 
-                    case HEALTHTender:
+                    case Tender:
                         //select TEXT, GrantIds, Funders, Areas, AreasDescr, Venue, MESHdescriptors
                         txt = rs.getString("text");
                         instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rs.getString("pubId"), "Text"));
 
                         if (numModalities > 1) {
-
-                            String tmpStr = rs.getString("MESHdescriptors");//.replace("\t", ",");
+                            String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
                             if (tmpStr != null && !tmpStr.equals("")) {
-                                instanceBuffer.get(1).add(new Instance(tmpStr, null, rs.getString("pubId"), "MESHdescriptor"));
+                                instanceBuffer.get(1).add(new Instance(tmpStr, null, rs.getString("pubId"), "DBPediaResource"));
                             }
                         }
-
+                        
                         if (numModalities > 2) {
-                            String tmpStr = rs.getString("Venue");//.replace("\t", ",");
+                            String tmpStr = rs.getString("Grants");//.replace("\t", ",");
                             if (tmpStr != null && !tmpStr.equals("")) {
-                                instanceBuffer.get(2).add(new Instance(tmpStr, null, rs.getString("pubId"), "Venue"));
+                                instanceBuffer.get(2).add(new Instance(tmpStr, null, rs.getString("pubId"), "Grant"));
                             }
                         }
-                        if (numModalities > 3) {
-                            String tmpStr = rs.getString("Funders");//.replace("\t", ",");
-                            if (tmpStr != null && !tmpStr.equals("")) {
-                                instanceBuffer.get(3).add(new Instance(tmpStr, null, rs.getString("pubId"), "Funder"));
-                            }
-                        }
-
-                        if (numModalities > 4) {
-                            String tmpStr = rs.getString("Areas");//.replace("\t", ",");
-                            if (tmpStr != null && !tmpStr.equals("")) {
-                                instanceBuffer.get(4).add(new Instance(tmpStr, null, rs.getString("pubId"), "Area"));
-                            }
-                        }
-                        ;
-
-                        if (numModalities > 5) {
-                            String tmpStr = rs.getString("GrantIds");//.replace("\t", ",");
-                            if (tmpStr != null && !tmpStr.equals("")) {
-                                instanceBuffer.get(5).add(new Instance(tmpStr, null, rs.getString("pubId"), "Grant"));
-                            }
-                        }
+                        
+                        
+                       
+                        
 
                         ;
                         break;
@@ -2049,7 +2032,7 @@ public class PTMExperiment {
                         instance = instances[m].get(0);
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 2 && experimentType == ExperimentType.HEALTHTender)) ? pruneLblCnt * 3 : pruneLblCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) ) ? pruneLblCnt * 3 : pruneLblCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
