@@ -1,9 +1,8 @@
 package org.madgik.MVTopicModel;
 
-import cc.mallet.util.*;
-
 import cc.mallet.types.*;
 import cc.mallet.pipe.*;
+import cc.mallet.util.Maths;
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
@@ -192,7 +191,8 @@ public class PTMFlow {
 
             } catch (Exception e) {
 
-                System.err.println(e.getMessage());
+                
+                logger.error(e.getMessage());
             }
 
             experimentDescription = "Multi View Topic Modeling Analysis on ACM corpus";
@@ -221,7 +221,7 @@ public class PTMFlow {
             } catch (SQLException e) {
                 // if the error message is "out of memory", 
                 // it probably means no database file is found
-                System.err.println(e.getMessage());
+                logger.error(e.getMessage());
             } finally {
                 try {
                     if (connection != null) {
@@ -229,7 +229,7 @@ public class PTMFlow {
                     }
                 } catch (SQLException e) {
                     // connection close failed.
-                    System.err.println(e);
+                    logger.error(e);
                 }
             }
         }
@@ -259,6 +259,7 @@ public class PTMFlow {
 
             inputStream = getClass().getClassLoader().getResourceAsStream(propFileName);
 
+            
             if (inputStream != null) {
                 prop.load(inputStream);
             } else {
@@ -449,12 +450,13 @@ public class PTMFlow {
 
             } catch (SQLException e) {
 
+                 logger.error("Error in insert topicPhrases: "+e);
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back");
+                        logger.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in insert topicPhrases");
+                        logger.error("Error in insert topicPhrases: "+excep);
                     }
                 }
             } finally {
@@ -468,7 +470,7 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+             logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -476,7 +478,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -584,10 +586,10 @@ public class PTMFlow {
 
             if (connection != null) {
                 try {
-                    System.err.print("Transaction is being rolled back");
+                    logger.error("Transaction is being rolled back");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    System.err.print("Error in insert TokensPerEntity");
+                    logger.error("Error in insert TokensPerEntity");
                 }
             }
         } finally {
@@ -597,7 +599,7 @@ public class PTMFlow {
                 }
                 connection.setAutoCommit(true);
             } catch (SQLException excep) {
-                System.err.print("Error in insert TokensPerEntity");
+                logger.error("Error in insert TokensPerEntity");
             }
         }
 
@@ -751,9 +753,9 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } catch (Exception e) {
-            System.err.println("File input error");
+            logger.error("File input error");
         } finally {
             try {
                 if (connection != null) {
@@ -761,7 +763,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -863,10 +865,10 @@ public class PTMFlow {
 
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back");
+                        logger.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in insert grantSimilarity");
+                        logger.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -880,7 +882,7 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -888,7 +890,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -987,10 +989,10 @@ public class PTMFlow {
 
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back");
+                        logger.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in insert grantSimilarity");
+                        logger.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -1004,7 +1006,7 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1012,7 +1014,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -1117,10 +1119,10 @@ public class PTMFlow {
 
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back");
+                        logger.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in insert grantSimilarity");
+                        logger.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -1134,7 +1136,7 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1142,7 +1144,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -1373,10 +1375,10 @@ public class PTMFlow {
 
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back");
+                        logger.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in insert grantSimilarity");
+                        logger.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -1390,7 +1392,7 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1398,7 +1400,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -1415,8 +1417,8 @@ public class PTMFlow {
         // Pipes: lowercase, tokenize, remove stopwords, map to features
         pipeListText.add(new Input2CharSequence()); //homer
         pipeListText.add(new CharSequenceLowercase());
-
-        SimpleTokenizer tokenizer = new SimpleTokenizer(new File(getClass().getClassLoader().getResource("en.txt").getFile()));
+        
+        SimpleTokenizer tokenizer = new SimpleTokenizer(new File("stoplists/en.txt"));
         pipeListText.add(tokenizer);
 
         Alphabet alphabet = new Alphabet();
@@ -1471,11 +1473,12 @@ public class PTMFlow {
                 sql = " select   pubId, authors, citations, categories, keywords, venue, DBPediaResources, fundings from pubviewsideinfo";
 
             }
-
+            
+            logger.info(" Get text from the database");
             // get txt data 
             Statement txtstatement = connection.createStatement();
             txtstatement.setFetchSize(50);
-            txtstatement.setQueryTimeout(360);  // set timeout to 30 sec.
+            txtstatement.setQueryTimeout(600);  // set timeout to 30 sec.
             ResultSet rstxt = txtstatement.executeQuery(txtsql);
 
             while (rstxt.next()) {
@@ -1495,9 +1498,10 @@ public class PTMFlow {
             }
 
             if (numModalities > 1) {
+                logger.info(" Get side info from the database");
                 Statement statement = connection.createStatement();
                 statement.setFetchSize(50);
-                statement.setQueryTimeout(360);  // set timeout to 30 sec.
+                statement.setQueryTimeout(600);  // set timeout to 30 sec.
                 ResultSet rs = statement.executeQuery(sql);
 
                 while (rs.next()) {
@@ -1671,7 +1675,8 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
+            
         } finally {
             try {
                 if (connection != null) {
@@ -1679,7 +1684,8 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e.getMessage());
+            
             }
         }
 
@@ -1694,8 +1700,9 @@ public class PTMFlow {
                 //oos.writeObject(tmpAlp);
                 //oos.close();
             } catch (IOException e) {
-                System.err.println("Problem adding text: "
+                logger.error("Problem adding text: "
                         + e);
+                
             }
         }
 
@@ -1763,7 +1770,7 @@ public class PTMFlow {
 //                        oos.writeObject(tmp);
 //                        oos.close();
 //                    } catch (IOException e) {
-//                        System.err.println("Problem serializing modality " + m + " alphabet to file "
+//                        logger.error("Problem serializing modality " + m + " alphabet to file "
 //                                + txtAlphabetFile + ": " + e);
 //                    }
 
@@ -1952,12 +1959,14 @@ public class PTMFlow {
 
             } catch (SQLException e) {
 
+                logger.error("Error in creatingrefACMTables: "+e.getMessage());
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back");
+                        logger.error("Transaction is being rolled back");
+                        
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in ACMReferences extraction");
+                        logger.error("Error in ACMReferences extraction"+excep);
                     }
                 }
             } finally {
@@ -1977,9 +1986,9 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } catch (Exception e) {
-            System.err.println("File input error");
+            logger.error("File input error: "+e);
         } finally {
             try {
                 if (connection != null) {
@@ -1987,7 +1996,7 @@ public class PTMFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
