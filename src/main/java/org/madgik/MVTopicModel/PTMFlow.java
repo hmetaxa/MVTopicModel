@@ -4,7 +4,6 @@ import cc.mallet.util.*;
 
 import cc.mallet.types.*;
 import cc.mallet.pipe.*;
-//import cc.mallet.types.InstanceList;  
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
@@ -126,11 +125,12 @@ public class PTMFlow {
 
         if (runTopicModelling) {
 
+            logger.info(" TopicModelling has started");
             String batchId = "-1";
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCnt,
                     pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars, PPRenabled,
                     experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
-            logger.info(" instances added through pipe");
+            logger.info("Instances added through pipe");
 
             double beta = 0.01;
             double[] betaMod = new double[numModalities];
@@ -279,7 +279,7 @@ public class PTMFlow {
             SQLConnectionString = prop.getProperty("SQLConnectionString");
 
         } catch (Exception e) {
-            System.out.println("Exception: " + e);
+            logger.error("Exception in reading properties: " + e);
         } finally {
             inputStream.close();
         }
@@ -1416,7 +1416,7 @@ public class PTMFlow {
         pipeListText.add(new Input2CharSequence()); //homer
         pipeListText.add(new CharSequenceLowercase());
 
-        SimpleTokenizer tokenizer = new SimpleTokenizer(new File("stoplists/en.txt"));
+        SimpleTokenizer tokenizer = new SimpleTokenizer(new File(getClass().getClassLoader().getResource("en.txt").getFile()));
         pipeListText.add(tokenizer);
 
         Alphabet alphabet = new Alphabet();
@@ -1459,7 +1459,7 @@ public class PTMFlow {
 
             if (experimentType == ExperimentType.ACM || experimentType == ExperimentType.OpenAIRE) {
 
-                txtsql = "select pubId, text, fulltext from pubviewtxt ";
+                txtsql = "select pubId, text, fulltext from pubviewtxt";
                 if (PPRenabled == Net2BoWType.PPR) {
                     sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  ";
                 } else if (PPRenabled == Net2BoWType.OneWay) {
@@ -1468,14 +1468,14 @@ public class PTMFlow {
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
                     sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from pubviewsideinfo";
                 }
-                sql = " select   pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewsideinfo";
+                sql = " select   pubId, authors, citations, categories, keywords, venue, DBPediaResources, fundings from pubviewsideinfo";
 
             }
 
             // get txt data 
             Statement txtstatement = connection.createStatement();
             txtstatement.setFetchSize(50);
-            txtstatement.setQueryTimeout(60);  // set timeout to 30 sec.
+            txtstatement.setQueryTimeout(360);  // set timeout to 30 sec.
             ResultSet rstxt = txtstatement.executeQuery(txtsql);
 
             while (rstxt.next()) {
@@ -1497,7 +1497,7 @@ public class PTMFlow {
             if (numModalities > 1) {
                 Statement statement = connection.createStatement();
                 statement.setFetchSize(50);
-                statement.setQueryTimeout(60);  // set timeout to 30 sec.
+                statement.setQueryTimeout(360);  // set timeout to 30 sec.
                 ResultSet rs = statement.executeQuery(sql);
 
                 while (rs.next()) {
@@ -1645,11 +1645,19 @@ public class PTMFlow {
                                 }
                             }
 
-                            if (numModalities > 4) {
-                                String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
-                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
+                             if (numModalities > 4) {
+                                String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
+                                if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
 
-                                    instanceBuffer.get(4).add(new Instance(tmpAuthorsStr, null, rs.getString("pubId"), "Venue"));
+                                    instanceBuffer.get(4).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
+                                }
+                            }
+                             
+                            if (numModalities > 5) {
+                                String tmpVenueStr = rs.getString("Venue");//.replace("\t", ",");
+                                if (tmpVenueStr != null && !tmpVenueStr.equals("")) {
+
+                                    instanceBuffer.get(5).add(new Instance(tmpVenueStr, null, rs.getString("pubId"), "Venue"));
                                 }
                             }
 

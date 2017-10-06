@@ -13,7 +13,7 @@ import java.util.Arrays;
 import java.util.ArrayList;
 
 import cc.mallet.types.*;
-import cc.mallet.util.MalletLogger;
+import org.apache.log4j.Logger;
 import cc.mallet.util.Randoms;
 
 import java.util.List;
@@ -23,7 +23,7 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
+
 
 /**
  * Parallel multi-view topic model runnable task using FTrees
@@ -33,7 +33,7 @@ import java.util.logging.Logger;
 public class FastQMVWVWorkerRunnable implements Runnable {
 
     //boolean isFinished = true;
-    public static Logger logger = MalletLogger.getLogger(FastQMVWVWorkerRunnable.class.getName());
+    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
     public static AtomicInteger newMassCnt = new AtomicInteger(1);
     public static AtomicInteger topicDocMassCnt = new AtomicInteger(1);
     public static AtomicInteger wordFTreeMassCnt = new AtomicInteger(1);

@@ -24,7 +24,7 @@ import java.text.NumberFormat;
 import cc.mallet.types.*;
 import cc.mallet.util.ArrayUtils;
 import cc.mallet.util.Randoms;
-import cc.mallet.util.MalletLogger;
+import org.apache.log4j.Logger;
 import gnu.trove.list.array.TByteArrayList;
 //import gnu.trove.TByteArrayList;
 import gnu.trove.map.hash.TIntIntHashMap;
@@ -52,7 +52,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
     public static final int UNASSIGNED_TOPIC = -1;
 
-    public static Logger logger = MalletLogger.getLogger(FastQMVWVParallelTopicModel.class.getName());
+    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
 
     public ArrayList<MixTopicModelTopicAssignment> data;  // the training instances and their topic assignments
     public Alphabet[] alphabet; // the alphabet for the input data
@@ -613,8 +613,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 }
 
                 long elapsedMillis = System.currentTimeMillis() - iterationStart;
-                if (doc % 100 == 0) {
-                    logger.fine(elapsedMillis + "ms " + "  docNum:" + doc);
+                if (doc % 100000 == 0) {
+                    logger.info(elapsedMillis + "ms " + "  docNum:" + doc);
 
                 }
             }
@@ -1332,7 +1332,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //                }
                 runnables[thread].setQueue(queues.get(thread));
 
-                logger.fine("submitting thread " + thread);
+                logger.info("submitting thread " + thread);
                 executor.submit(runnables[thread]);
                 //runnables[thread].run();
             }
@@ -2282,7 +2282,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         betaSum[m]);
 
                 if (betaSum[m] < numTypes[m] * 0.0001) { //too sparse for this topic model (num of topics probably large for this modality).. prevent smoothing from going to zero 
-                    logger.warning("Too sparse modality: set Beta to 0.0001");
+                    logger.warn("Too sparse modality: set Beta to 0.0001");
                     beta[m] = 0.0001;
                     betaSum[m] = beta[m] * numTypes[m];
 
@@ -2293,18 +2293,18 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     {
                         beta[m] = 0.0001;
                         betaSum[m] = beta[m] * numTypes[m];
-                        logger.warning("Too sparse modality. Dirichlet optimization has failed. Set Beta to 0.001");
+                        logger.warn("Too sparse modality. Dirichlet optimization has failed. Set Beta to 0.001");
                     } else {
                         betaSum[m] = prevBetaSum;
                         beta[m] = betaSum[m] / numTypes[m];
-                        logger.warning("Dirichlet optimization has become unstable (NaN Value). Resetting to previous Beta");
+                        logger.warn("Dirichlet optimization has become unstable (NaN Value). Resetting to previous Beta");
                     }
                 } else {
                     beta[m] = betaSum[m] / numTypes[m];
                 }
             } catch (RuntimeException e) {
                 // Dirichlet optimization has become unstable. This is known to happen for very small corpora (~5 docs).
-                logger.warning("Dirichlet optimization has become unstable:" + e.getMessage() + ". Resetting to previous Beta");
+                logger.warn("Dirichlet optimization has become unstable:" + e.getMessage() + ". Resetting to previous Beta");
                 betaSum[m] = prevBetaSum;
                 beta[m] = betaSum[m] / numTypes[m];
 
@@ -3307,11 +3307,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             logLikelihood[m] += modalityCnt * Dirichlet.logGammaStirling((double) gamma[m] * alphaSum[m]);
 
             if (Double.isNaN(logLikelihood[m])) {
-                logger.warning("NaN in log likelihood level1 calculation" + " for modality: " + m);
+                logger.warn("NaN in log likelihood level1 calculation" + " for modality: " + m);
                 logLikelihood[m] = 0;
                 continue;
             } else if (Double.isInfinite(logLikelihood[m])) {
-                logger.warning("infinite log likelihood at level1 " + " for modality: " + m);
+                logger.warn("infinite log likelihood at level1 " + " for modality: " + m);
                 logLikelihood[m] = 0;
                 continue;
             }
@@ -3334,11 +3334,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         logLikelihood[m] += (beta[m] + count) == 0 ? 0 : Dirichlet.logGammaStirling(beta[m] + count);
 
                         if (Double.isNaN(logLikelihood[m])) {
-                            logger.warning("NaN in log likelihood calculation");
+                            logger.warn("NaN in log likelihood calculation");
                             logLikelihood[m] = 0;
                             break;
                         } else if (Double.isInfinite(logLikelihood[m])) {
-                            logger.warning("infinite log likelihood");
+                            logger.warn("infinite log likelihood");
                             logLikelihood[m] = 0;
                             break;
                         }

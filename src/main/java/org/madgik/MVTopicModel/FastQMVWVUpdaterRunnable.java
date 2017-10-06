@@ -3,7 +3,7 @@ package org.madgik.MVTopicModel;
 import org.madgik.utils.FastQDelta;
 import org.madgik.utils.FTree;
 import cc.mallet.types.Dirichlet;
-import cc.mallet.util.MalletLogger;
+import org.apache.log4j.Logger;
 import cc.mallet.util.Randoms;
 import static java.lang.Math.log;
 import java.text.NumberFormat;
@@ -15,7 +15,6 @@ import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.logging.Logger;
 import org.knowceans.util.RandomSamplers;
 import org.knowceans.util.Samplers;
 import org.knowceans.util.Vectors;
@@ -29,7 +28,7 @@ import org.knowceans.util.Vectors;
  */
 public class FastQMVWVUpdaterRunnable implements Runnable {
 
-    public static Logger logger = MalletLogger.getLogger(FastQMVWVUpdaterRunnable.class.getName());
+    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
     protected int[][][] typeTopicCounts; // indexed by <feature index, topic index>
     protected int[][] tokensPerTopic; // indexed by <topic index>
     protected FTree[][] trees; //store 
@@ -309,7 +308,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                 beta[m] = betaSum[m] / numTypes[m];
             } catch (RuntimeException e) {
                 // Dirichlet optimization has become unstable. This is known to happen for very small corpora (~5 docs).
-                logger.warning("Dirichlet optimization has become unstable:" + e.getMessage() + ". Resetting to previous Beta");
+                logger.warn("Dirichlet optimization has become unstable:" + e.getMessage() + ". Resetting to previous Beta");
                 betaSum[m] = prevBetaSum;
                 beta[m] = betaSum[m] / numTypes[m];
 

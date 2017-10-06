@@ -12,12 +12,6 @@ import cc.mallet.topics.ParallelTopicModel;
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
-//import cc.mallet.pipe.iterator.*;
-//import cc.mallet.topics.*;
-//import cc.mallet.util.Maths;
-//import gnu.trove.map.TIntObjectMap;
-//import gnu.trove.map.TObjectIntMap;
-//import gnu.trove.map.hash.TIntObjectHashMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 
 import java.util.*;
@@ -29,7 +23,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.logging.Logger;
+import org.apache.log4j.Logger;
 import org.madgik.utils.CSV2FeatureSequence;
 import org.madgik.utils.FeatureSequenceRemovePlural;
 import static org.madgik.utils.Utils.cosineSimilarity;
@@ -61,7 +55,7 @@ public class PTMExperiment {
         PPR
     }
 
-    public static Logger logger = MalletLogger.getLogger(PTMExperiment.class.getName());
+    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
     
     public PTMExperiment() throws IOException {
         

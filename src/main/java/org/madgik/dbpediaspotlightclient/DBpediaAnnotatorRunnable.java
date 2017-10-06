@@ -16,19 +16,21 @@
 package org.madgik.dbpediaspotlightclient;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.methods.GetMethod;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
@@ -43,12 +45,11 @@ import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.httpclient.params.HttpMethodParams;
+import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.madgik.dbpediaspotlightclient.DBpediaAnnotator.AnnotatorType;
-import org.madgik.dbpediaspotlightclient.DBpediaAnnotator.ExperimentType;
-
 /**
  * Simple web service-based annotation client for DBpedia Spotlight.
  *
@@ -56,21 +57,22 @@ import org.madgik.dbpediaspotlightclient.DBpediaAnnotator.ExperimentType;
  */
 public class DBpediaAnnotatorRunnable implements Runnable {
 
+    public static Logger logger = Logger.getLogger(DBpediaAnnotator.class.getName());
     int startDoc, numDocs;
     List<pubText> pubs = null;
     List<String> resources = null;
     String SQLLitedb = "";
     AnnotatorType annotator;
     int threadId = 0;
-    boolean annotate = true;
-    ExperimentType experimentType = ExperimentType.ACM;
+    boolean annotate = true;    
+    String spotlightService;
 
     //private HttpClient client = new HttpClient();
     private final HttpClient httpClient;
 
     public DBpediaAnnotatorRunnable(
             int startDoc, int numDocs, String SQLLitedb, AnnotatorType annotator,
-            List<pubText> pubs, int threadId, HttpClient httpClient, List<String> resources, boolean annotate, ExperimentType experimentType) {
+            List<pubText> pubs, int threadId, HttpClient httpClient, List<String> resources, boolean annotate, String spotlightService ) {
         this.numDocs = numDocs;
         this.startDoc = startDoc;
         this.pubs = pubs;
@@ -80,7 +82,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         this.httpClient = httpClient;
         this.annotate = annotate;
         this.resources = resources;
-        this.experimentType = experimentType;
+        this.spotlightService = spotlightService;
+        
     }
 
     public void getAndUpdateDetails(String resourceURI) {
@@ -123,7 +126,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             response = request(getMethod);
 
         } catch (Exception e) {
-            System.err.println("Invalid response from dbpedia API:" + e);
+            logger.error("Invalid response from dbpedia API:" + e);
             //throw new Exception("Received invalid response from DBpedia Spotlight API.");
 
         }
@@ -137,9 +140,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             resultJSON = new JSONObject(response);
             entities = resultJSON.getJSONObject("results").getJSONArray("bindings");
         } catch (JSONException e) {
-            System.err.println("Invalid JSON response from dbpedia API:" + e);
-            //System.err.println(e);
-            //throw new Exception("Received invalid response from DBpedia Spotlight API.");
+            logger.error("Invalid JSON response from dbpedia API:" + e);
+            
         }
 
         if (entities != null) {
@@ -154,8 +156,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                     try {
                         categories.add(new DBpediaLink(entity.getJSONObject("subject").getString("value"), entity.getJSONObject("subjectLabel").getString("value")));
                     } catch (JSONException e) {
-                        //System.err.println("JSON parsing categories not found:" + e);
-                        //LOG.error("JSON exception "+e);
+                        logger.error("JSON parsing categories not found:" + e);
+                        
                     }
                     try {
                         String redirectLabel = entity.getJSONObject("redirectLabel").getString("value");
@@ -164,8 +166,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                             abreviations.add(new DBpediaLink(entity.getJSONObject("redirect").getString("value"), redirectLabel));
                         }
                     } catch (JSONException e) {
-                        //System.err.println("JSON parsing redirectLabel not found:" + e);
-                        //LOG.error("JSON exception "+e);
+                        logger.error("JSON parsing redirectLabel not found:" + e);
+                        
                     }
                     try {
                         String disambiguatesLabel = entity.getJSONObject("disambiguatesLabel").getString("value").replace("(disambiguation)", "").trim();
@@ -173,8 +175,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                             abreviations.add(new DBpediaLink(entity.getJSONObject("disambiguates").getString("value"), disambiguatesLabel));
                         }
                     } catch (JSONException e) {
-                       // System.err.println("JSON parsing disambiguatesLabel not found:" + e);
-                        //LOG.error("JSON exception "+e);
+                       logger.error("JSON parsing disambiguatesLabel not found:" + e);
+                        
                     }
                     if (i == 0) {
                         resourceAbstract = entity.getJSONObject("abstract").getString("value");
@@ -182,14 +184,14 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                     }
 
                 } catch (JSONException e) {
-                    System.err.println("JSON parsing exception from dbpedia API:" + e);
-                    //LOG.error("JSON exception "+e);
+                    logger.error("JSON parsing exception from dbpedia API:" + e);
+                    
                 }
 
             }
 
             //public DBpediaResource(DBpediaResourceType type, String URI, String title, int support,  double Similarity, double confidence, String mention, List<String> categories, String wikiAbstract, String wikiId) {
-            saveResourceDetails(experimentType, new DBpediaResource(DBpediaResourceType.Entity, resourceURI, label, 0, 1,
+            saveResourceDetails( new DBpediaResource(DBpediaResourceType.Entity, resourceURI, label, 0, 1,
                     1, "", categories, resourceAbstract, "", abreviations));
         }
     }
@@ -198,7 +200,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
         //private final static String API_URL = "http://localhost:2222/rest/candidates";
         //final String API_URL = "http://localhost:2222/rest/annotate";
-        final String API_URL = "http://model.dbpedia-spotlight.org/en/annotate";
+        final String API_URL = spotlightService.trim(); //"http://model.dbpedia-spotlight.org/en/annotate";
         //http://model.dbpedia-spotlight.org/en/annotate
         //private final static String API_URL = "http://www.dbpedia-spotlight.com/en/annotate";
         //private final static String API_URL = "http://spotlight.sztaki.hu:2222/rest/annotate";
@@ -232,9 +234,9 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             resultJSON = new JSONObject(spotlightResponse);
             entities = resultJSON.getJSONArray("Resources");
         } catch (JSONException e) {
-            System.err.println("Invalid response from DBpedia Spotlight API:" + e);
+            logger.error("Invalid response from DBpedia Spotlight API:" + e);
             return resources;
-            //throw new Exception("Received invalid response from DBpedia Spotlight API. \n");
+            
         }
 
         for (int i = 0; i < entities.length(); i++) {
@@ -246,8 +248,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                                 1, entity.getString("@surfaceForm"), null, "", "", null));
 
             } catch (JSONException e) {
-                System.err.println("Invalid JSON response from DBpedia Spotlight API:" + e);
-                //LOG.error("JSON exception "+e);
+                logger.error("Invalid JSON response from DBpedia Spotlight API:" + e);
+                
             }
 
         }
@@ -273,7 +275,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             response = request(getMethod);
 
         } catch (UnsupportedEncodingException e) {
-            System.err.println("UnsupportedEncodingException calling TagMe API:" + e);
+            logger.error("UnsupportedEncodingException calling TagMe API:" + e);
         }
 
         assert response != null;
@@ -295,7 +297,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             resultJSON = new JSONObject(response);
             entities = resultJSON.getJSONArray("annotations");
         } catch (JSONException e) {
-            System.err.println("Invalid response from DBpedia TagMe API:" + e);
+            logger.error("Invalid response from DBpedia TagMe API:" + e);
             return resources;
             //throw new Exception("Received invalid response from DBpedia Spotlight API. \n");
         }
@@ -312,7 +314,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                         categories.add(new DBpediaLink(JSONcategories.getString(j), ""));
                     }
                 } catch (JSONException e) {
-                    System.err.println("Invalid JSON response from TagMe API:" + e);
+                    logger.error("Invalid JSON response from TagMe API:" + e);
                     //LOG.error("JSON exception "+e);
                 }
                 //public DBpediaResource(DBpediaResourceType type, String URI, String title, int support,  double Similarity, double confidence, String mention, List<String> categories, String wikiAbstract, String wikiId) {
@@ -322,8 +324,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 resources.add(newResource);
 
             } catch (JSONException e) {
-                System.err.println("Invalid JSON response from TagMe API:" + e);
-                //LOG.error("JSON exception "+e);
+                logger.error("Invalid JSON response from TagMe API:" + e);
+                
             }
 
         }
@@ -351,7 +353,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 final long startDocTime = System.currentTimeMillis();
                 getAndUpdateDetails(resources.get(resource));
                 final long endDocTime = System.currentTimeMillis();
-                System.out.printf(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, resource, (endDocTime - startDocTime)));
+                logger.info(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, resource, (endDocTime - startDocTime)));
 
             }
         }
@@ -457,10 +459,10 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
                 if (connection != null) {
                     try {
-                        System.err.print("Transaction is being rolled back:" + e.toString());
+                        logger.error("Transaction is being rolled back:" + e.toString());
                         connection.rollback();
                     } catch (SQLException excep) {
-                        System.err.print("Error in insert pubDBpediaResource:" + e.toString());
+                        logger.error("Error in insert pubDBpediaResource:" + e.toString());
                     }
                 }
             } finally {
@@ -474,7 +476,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -482,19 +484,19 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
         if (annotator == AnnotatorType.tagMe) {
             for (DBpediaResource e : entities) {
-                saveResourceDetails(experimentType, e);
+                saveResourceDetails( e);
             }
         }
 
     }
 
-    public void saveResourceDetails(ExperimentType experimentType, DBpediaResource resource) {
+    public void saveResourceDetails(DBpediaResource resource) {
 
         Connection connection = null;
         try {
@@ -550,11 +552,11 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
                     if (connection != null) {
                         try {
-                            System.err.println("Transaction is being rolled back:" + e.toString());
+                            logger.error("Transaction is being rolled back:" + e.toString());
                             connection.rollback();
                             connection.setAutoCommit(true);
                         } catch (SQLException excep) {
-                            System.err.println("Error in insert DBpediaResource Category:" + e.toString());
+                            logger.error("Error in insert DBpediaResource Category:" + excep.toString());
                         }
                     }
                 } finally {
@@ -585,11 +587,11 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
                     if (connection != null) {
                         try {
-                            System.err.println("Transaction is being rolled back:" + e.toString());
+                            logger.error("Transaction is being rolled back:" + e.toString());
                             connection.rollback();
                             connection.setAutoCommit(true);
                         } catch (SQLException excep) {
-                            System.err.println("Error in insert DBpediaResource Acronym:" + e.toString());
+                            logger.error("Error in insert DBpediaResource Acronym:" + excep.toString());
                         }
                     }
                 } finally {
@@ -604,7 +606,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -612,7 +614,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                System.err.println(e);
+                logger.error(e);
             }
         }
 
@@ -637,7 +639,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 s = parser.parse(snippet);
             } catch (Exception e) {
 
-                System.err.printf(e.toString());
+                logger.error(e.toString());
             }
             if (s != null && !s.equals("")) {
                 i++;
@@ -656,13 +658,12 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
                         final long endTime = System.currentTimeMillis();
                         sum += (endTime - startTime);
-                        //System.out.printf("(%s) Extraction ran in %s ms. \n", i, (endTime - startTime));
-                        //LOG.info(String.format("(%s) Extraction ran in %s ns.", i, endTime - startTime));
+                        
                         correct++;
                     } catch (Exception e) {
                         error++;
-                        System.err.printf(e.toString());
-                        //LOG.error(e);
+                        logger.error(e.toString());
+                        
                         e.printStackTrace();
                     }
 
@@ -673,11 +674,11 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
         }
 
-        System.out.printf(String.format("[%s]: Extracted %s entities from %s text items, with %s successes and %s errors. \n", threadId, entities.size(), txt2AnnotatNum, correct, error));
+        logger.info(String.format("[%s]: Extracted %s entities from %s text items, with %s successes and %s errors. \n", threadId, entities.size(), txt2AnnotatNum, correct, error));
 
         double avg = (new Double(sum) / txt2AnnotatNum);
         final long endDocTime = System.currentTimeMillis();
-        System.out.printf(String.format("[%s]: Extraction time for %s pub: Total:%s ms AvgPerRequest:%s ms \n", threadId, docNum, (endDocTime - startDocTime), avg));
+        logger.info(String.format("[%s]: Extraction time for %s pub: Total:%s ms AvgPerRequest:%s ms \n", threadId, docNum, (endDocTime - startDocTime), avg));
         return entities;
     }
 
@@ -708,14 +709,14 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                     }
                     final long endTime = System.nanoTime();
                     sum += endTime - startTime;
-                    System.out.printf("(%s) Extraction ran in %s ns. \n", i, endTime - startTime);
-                    //LOG.info(String.format("(%s) Extraction ran in %s ns.", i, endTime - startTime));
+                    logger.info(String.format("(%s) Extraction ran in %s ns. \n", i, endTime - startTime));
+                    
                     correct++;
                 } catch (Exception e) {
                     error++;
-                    System.err.printf(e.toString());
-                    //LOG.error(e);
-                    e.printStackTrace();
+                    logger.error(e);
+                    
+                    
                 }
                 for (DBpediaResource e : entities) {
                     out.println(e.getLink().uri);
@@ -725,10 +726,10 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             }
         }
         out.close();
-        System.out.printf(String.format("Extracted entities from %s text items, with %s successes and %s errors. \n", i, correct, error));
-        System.out.printf("Results saved to: " + outputFile.getAbsolutePath());
+        logger.info(String.format("Extracted entities from %s text items, with %s successes and %s errors. \n", i, correct, error));
+        logger.info("Results saved to: " + outputFile.getAbsolutePath());
         double avg = (new Double(sum) / i);
-        System.out.printf(String.format("Average extraction time: %s ms \n", avg * 1000000));
+        logger.info(String.format("Average extraction time: %s ms \n", avg * 1000000));
     }
 
     public void evaluate(File inputFile, File outputFile) throws Exception {
@@ -738,6 +739,37 @@ public class DBpediaAnnotatorRunnable implements Runnable {
     public void evaluateManual(File inputFile, File outputFile, int restartFrom) throws Exception {
         saveExtractedEntitiesSet(inputFile, outputFile, new LineParser.ManualDatasetLineParser(), restartFrom, AnnotatorType.spotlight);
     }
+    
+    private static String getStringFromInputStream(InputStream is) {
+
+		BufferedReader br = null;
+		StringBuilder sb = new StringBuilder();
+
+		String line;
+		try {
+
+			br = new BufferedReader(new InputStreamReader(is));
+			while ((line = br.readLine()) != null) {
+				sb.append(line);
+			}
+
+		} catch (IOException e) {
+                    logger.error(e);
+			
+		} finally {
+			if (br != null) {
+				try {
+					br.close();
+				} catch (IOException e) {
+					logger.error(e);
+				}
+			}
+		}
+
+		return sb.toString();
+
+	}
+    
 
     public String request(HttpMethod method) throws Exception {
 
@@ -756,11 +788,11 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             }
 
             // Read the response body.
-            byte[] responseBody = method.getResponseBody(); //TODO Going to buffer response body of large or unknown size. Using getResponseBodyAsStream instead is recommended.
+            InputStream responseBody = method.getResponseBodyAsStream(); // .getResponseBody(); //TODO Going to buffer response body of large or unknown size. Using getResponseBodyAsStream instead is recommended.
 
             // Deal with the response.
             // Use caution: ensure correct character encoding and is not binary data
-            spotlightResponse = new String(responseBody);
+            spotlightResponse = getStringFromInputStream(responseBody);
 
         } catch (HttpException e) {
 
