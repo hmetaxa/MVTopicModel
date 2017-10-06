@@ -33,6 +33,7 @@ public class DBpediaAnnotator {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String spotlightService = "";
     int numOfThreads = 4;
+    double confidence = 0.4;
     
     public enum ExperimentType {
         OpenAIRE,
@@ -69,6 +70,7 @@ public class DBpediaAnnotator {
             SQLConnectionString = prop.getProperty("SQLConnectionString");
             spotlightService = prop.getProperty("SpotlightService");
             numOfThreads = Integer.parseInt(prop.getProperty("NumOfThreads"));
+            confidence = Double.parseDouble(prop.getProperty("Confidence"));
 
         } catch (Exception e) {
             logger.error("Exception in reading properties: " + e);
@@ -173,7 +175,7 @@ public class DBpediaAnnotator {
         // Passing it to the HttpClient.
         HttpClient httpClient = new HttpClient(connectionManager);
 
-        
+        logger.info(String.format("Get new resources"));
         List<String> newURIs = getNewResources(experimentType, SQLConnectionString);
         //List<String> newURIs = new ArrayList<String>(); // getNewResources(experimentType, SQLLitedb);
         //newURIs.add("http://dbpedia.org/resource/Artificial_intelligence");
@@ -184,7 +186,9 @@ public class DBpediaAnnotator {
 
         int docsPerThread = newURIs.size() / numOfThreads;
         int offset = 0;
-
+        
+        logger.info(String.format("Get extra fields from dbpedia.org using %d threads", numOfThreads));
+        
         for (int thread = 0; thread < numOfThreads; thread++) {
 
             // some docs may be missing at the end due to integer division
@@ -194,7 +198,7 @@ public class DBpediaAnnotator {
 
             runnables[thread] = new DBpediaAnnotatorRunnable(
                     offset, docsPerThread, SQLConnectionString, null,
-                    null, thread, httpClient, newURIs, false, spotlightService
+                    null, thread, httpClient, newURIs, false, spotlightService, confidence
             );
 
             offset += docsPerThread;
@@ -250,6 +254,7 @@ public class DBpediaAnnotator {
             
 
             Statement statement = connection.createStatement();
+            logger.info("Get new publications");
             statement.setQueryTimeout(360);  // set timeout to 30 sec.
 
             //statement.executeUpdate("create table if not exists PubDBpediaResource (PubId TEXT, ResourceURI TEXT, Support INT) ");
@@ -287,7 +292,8 @@ public class DBpediaAnnotator {
 
         int docsPerThread = pubs.size() / numOfThreads;
         int offset = 0;
-
+        logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, spotlightService, confidence));
+        
         for (int thread = 0; thread < numOfThreads; thread++) {
 
             // some docs may be missing at the end due to integer division
@@ -297,7 +303,7 @@ public class DBpediaAnnotator {
 
             runnables[thread] = new DBpediaAnnotatorRunnable(
                     offset, docsPerThread, SQLConnectionString, annotator,
-                    pubs, thread, httpClient, null, true, spotlightService
+                    pubs, thread, httpClient, null, true, spotlightService,confidence
             );
 
             offset += docsPerThread;
@@ -318,8 +324,11 @@ public class DBpediaAnnotator {
         //Class.forName("org.sqlite.JDBC");
         Class.forName("org.postgresql.Driver");
         DBpediaAnnotator c = new DBpediaAnnotator();
+        logger.info("DBPedia annotation started");
         c.getPropValues();
+        logger.info("DBPedia annotation: Annotate new publications");
         c.annotatePubs(ExperimentType.OpenAIRE, AnnotatorType.spotlight);
+        logger.info("DBPedia annotation: Get extra fields from DBPedia");
         c.updateResourceDetails(ExperimentType.OpenAIRE);
 
     }

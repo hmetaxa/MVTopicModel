@@ -66,13 +66,14 @@ public class DBpediaAnnotatorRunnable implements Runnable {
     int threadId = 0;
     boolean annotate = true;    
     String spotlightService;
+    double confidence; 
 
     //private HttpClient client = new HttpClient();
     private final HttpClient httpClient;
 
     public DBpediaAnnotatorRunnable(
             int startDoc, int numDocs, String SQLLitedb, AnnotatorType annotator,
-            List<pubText> pubs, int threadId, HttpClient httpClient, List<String> resources, boolean annotate, String spotlightService ) {
+            List<pubText> pubs, int threadId, HttpClient httpClient, List<String> resources, boolean annotate, String spotlightService, double confidence ) {
         this.numDocs = numDocs;
         this.startDoc = startDoc;
         this.pubs = pubs;
@@ -83,6 +84,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         this.annotate = annotate;
         this.resources = resources;
         this.spotlightService = spotlightService;
+        this.confidence = confidence;
         
     }
 
@@ -156,7 +158,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                     try {
                         categories.add(new DBpediaLink(entity.getJSONObject("subject").getString("value"), entity.getJSONObject("subjectLabel").getString("value")));
                     } catch (JSONException e) {
-                        logger.error("JSON parsing categories not found:" + e);
+                        logger.debug("JSON parsing categories not found:" + e);
                         
                     }
                     try {
@@ -166,7 +168,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                             abreviations.add(new DBpediaLink(entity.getJSONObject("redirect").getString("value"), redirectLabel));
                         }
                     } catch (JSONException e) {
-                        logger.error("JSON parsing redirectLabel not found:" + e);
+                        logger.debug("JSON parsing redirectLabel not found:" + e);
                         
                     }
                     try {
@@ -175,7 +177,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                             abreviations.add(new DBpediaLink(entity.getJSONObject("disambiguates").getString("value"), disambiguatesLabel));
                         }
                     } catch (JSONException e) {
-                       logger.error("JSON parsing disambiguatesLabel not found:" + e);
+                       logger.debug("JSON parsing disambiguatesLabel not found:" + e);
                         
                     }
                     if (i == 0) {
@@ -204,14 +206,14 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         //http://model.dbpedia-spotlight.org/en/annotate
         //private final static String API_URL = "http://www.dbpedia-spotlight.com/en/annotate";
         //private final static String API_URL = "http://spotlight.sztaki.hu:2222/rest/annotate";
-        final double CONFIDENCE = 0.4;
+        //final double CONFIDENCE = 0.4;
         final int SUPPORT = 0;
 
         String spotlightResponse = "";
         LinkedList<DBpediaResource> resources = new LinkedList<DBpediaResource>();
         try {
             GetMethod getMethod = new GetMethod(API_URL + "/?"
-                    + "confidence=" + CONFIDENCE
+                    + "confidence=" + confidence
                     + "&support=" + SUPPORT
                     + "&text=" //President%20Obama%20called%20Wednesday%20on%20Congress%20to%20extend%20a%20tax%20break%20for%20students%20included%20in%20last%20year%27s%20economic%20stimulus%20package,%20arguing%20that%20the%20policy%20provides%20more%20generous%20assistance"
                     //+ URLEncoder.encode("President Obama called Wednesday on Congress to extend a tax break for students included in last year's economic stimulus package, arguing that the policy provides more generous assistance", "utf-8")
@@ -234,21 +236,23 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             resultJSON = new JSONObject(spotlightResponse);
             entities = resultJSON.getJSONArray("Resources");
         } catch (JSONException e) {
-            logger.error("Invalid response from DBpedia Spotlight API:" + e);
+            logger.error(String.format("Invalid response -no resources- from DBpedia Spotlight API for input %s: %s", input, e));
             return resources;
             
         }
 
+        JSONObject entity = null;
         for (int i = 0; i < entities.length(); i++) {
             try {
-                JSONObject entity = entities.getJSONObject(i);
+                entity = entities.getJSONObject(i);
                 //public DBpediaResource(DBpediaResourceType type, String URI, String title, int support,  double Similarity, double confidence, String mention, List<String> categories, String wikiAbstract, String wikiId) {
                 resources.add(
                         new DBpediaResource(DBpediaResourceType.Entity, entity.getString("@URI"), "", Integer.parseInt(entity.getString("@support")), Double.parseDouble(entity.getString("@similarityScore")),
                                 1, entity.getString("@surfaceForm"), null, "", "", null));
 
             } catch (JSONException e) {
-                logger.error("Invalid JSON response from DBpedia Spotlight API:" + e);
+                logger.error(String.format("Invalid response -no details- from DBpedia Spotlight API for resource %s: %s", entity.toString(), e));
+                
                 
             }
 
