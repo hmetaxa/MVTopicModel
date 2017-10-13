@@ -50,7 +50,7 @@ public class PTMFlow {
     }
 
     public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
-    
+
     int topWords = 20;
     int showTopicsInterval = 50;
     byte numModalities = 6;
@@ -191,7 +191,6 @@ public class PTMFlow {
 
             } catch (Exception e) {
 
-                
                 logger.error(e.getMessage());
             }
 
@@ -259,7 +258,6 @@ public class PTMFlow {
 
             inputStream = getClass().getClassLoader().getResourceAsStream(propFileName);
 
-            
             if (inputStream != null) {
                 prop.load(inputStream);
             } else {
@@ -450,13 +448,13 @@ public class PTMFlow {
 
             } catch (SQLException e) {
 
-                 logger.error("Error in insert topicPhrases: "+e);
+                logger.error("Error in insert topicPhrases: " + e);
                 if (connection != null) {
                     try {
                         logger.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert topicPhrases: "+excep);
+                        logger.error("Error in insert topicPhrases: " + excep);
                     }
                 }
             } finally {
@@ -470,7 +468,7 @@ public class PTMFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-             logger.error(e.getMessage());
+            logger.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1417,7 +1415,7 @@ public class PTMFlow {
         // Pipes: lowercase, tokenize, remove stopwords, map to features
         pipeListText.add(new Input2CharSequence()); //homer
         pipeListText.add(new CharSequenceLowercase());
-        
+
         SimpleTokenizer tokenizer = new SimpleTokenizer(new File("stoplists/en.txt"));
         pipeListText.add(tokenizer);
 
@@ -1457,28 +1455,30 @@ public class PTMFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "";
+            String txtsql = "select pubId, text, fulltext from pubviewtxt";
 
-            if (experimentType == ExperimentType.ACM || experimentType == ExperimentType.OpenAIRE) {
+            if (experimentType == ExperimentType.ACM) {
 
-                txtsql = "select pubId, text, fulltext from pubviewtxt";
                 if (PPRenabled == Net2BoWType.PPR) {
                     sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  ";
                 } else if (PPRenabled == Net2BoWType.OneWay) {
-                    sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from pubviewsideinfo";
-                    //sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway ";
+
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway ";
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  pubId, text, fulltext, authors, citations, categories, period, keywords, venue, DBPediaResources from pubviewsideinfo";
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewtwoway ";
+
                 }
-                sql = " select   pubId, authors, citations, categories, keywords, venue, DBPediaResources, fundings from pubviewsideinfo";
+
+            } else if (experimentType == ExperimentType.OpenAIRE) {
+                sql = " select   pubId,  citations,  keywords from pubviewsideinfo";
 
             }
-            
-            logger.info(" Get text from the database");
+
+            logger.info(" Getting text from the database");
             // get txt data 
             Statement txtstatement = connection.createStatement();
-            txtstatement.setFetchSize(50);
-            txtstatement.setQueryTimeout(600);  // set timeout to 30 sec.
+            txtstatement.setFetchSize(10000);
+            txtstatement.setQueryTimeout(800);  // set timeout to 30 sec.
             ResultSet rstxt = txtstatement.executeQuery(txtsql);
 
             while (rstxt.next()) {
@@ -1498,10 +1498,10 @@ public class PTMFlow {
             }
 
             if (numModalities > 1) {
-                logger.info(" Get side info from the database");
+                logger.info(" Getting side info from the database");
                 Statement statement = connection.createStatement();
-                statement.setFetchSize(50);
-                statement.setQueryTimeout(600);  // set timeout to 30 sec.
+                statement.setFetchSize(10000);
+                statement.setQueryTimeout(800);  // set timeout to 30 sec.
                 ResultSet rs = statement.executeQuery(sql);
 
                 while (rs.next()) {
@@ -1627,44 +1627,6 @@ public class PTMFlow {
                                 }
                             }
 
-//DBPediaResources
-                            if (numModalities > 3) {
-                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
-                                String DBPediaResourceStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] DBPediaResources = tmpStr.trim().split(",");
-                                    for (int j = 0; j < DBPediaResources.length; j++) {
-                                        String[] pairs = DBPediaResources[j].trim().split(";");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                DBPediaResourceStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            DBPediaResourceStr += DBPediaResources[j] + ",";
-
-                                        }
-                                    }
-                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
-                                }
-                            }
-
-                             if (numModalities > 4) {
-                                String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
-                                if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
-
-                                    instanceBuffer.get(4).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
-                                }
-                            }
-                             
-                            if (numModalities > 5) {
-                                String tmpVenueStr = rs.getString("Venue");//.replace("\t", ",");
-                                if (tmpVenueStr != null && !tmpVenueStr.equals("")) {
-
-                                    instanceBuffer.get(5).add(new Instance(tmpVenueStr, null, rs.getString("pubId"), "Venue"));
-                                }
-                            }
-
                             break;
 
                         default:
@@ -1672,11 +1634,61 @@ public class PTMFlow {
 
                 }
             }
+
+            if (numModalities > 3 && experimentType == ExperimentType.OpenAIRE) {
+                logger.info(" Getting DBpedia annotations from the database");
+                // get txt data 
+                Statement dbPediastatement = connection.createStatement();
+                dbPediastatement.setFetchSize(10000);
+                dbPediastatement.setQueryTimeout(800);  // set timeout to 30 sec.
+                ResultSet rs = txtstatement.executeQuery("select   pubId,  DBPediaResources from pubviewdbpedia");
+
+                while (rs.next()) {
+                    String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
+                    String DBPediaResourceStr = "";
+                    if (tmpStr != null && !tmpStr.equals("")) {
+                        String[] DBPediaResources = tmpStr.trim().split(",");
+                        for (int j = 0; j < DBPediaResources.length; j++) {
+                            String[] pairs = DBPediaResources[j].trim().split(";");
+                            if (pairs.length == 2) {
+                                for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
+                                    DBPediaResourceStr += pairs[0] + ",";
+                                }
+                            } else {
+                                DBPediaResourceStr += DBPediaResources[j] + ",";
+
+                            }
+                        }
+                        DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
+                        instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
+                    }
+                }
+            }
+
+            if (numModalities > 4 && experimentType == ExperimentType.OpenAIRE) {
+                logger.info(" Getting funding info from the database");
+                // get txt data 
+                Statement dbfundingstatement = connection.createStatement();
+                dbfundingstatement.setFetchSize(10000);
+                dbfundingstatement.setQueryTimeout(800);  // set timeout to 30 sec.
+                ResultSet rs = txtstatement.executeQuery("select   pubId,  fundings from pubviewfunding");
+
+                while (rs.next()) {
+
+                    String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
+                    if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
+
+                        instanceBuffer.get(4).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
+                    }
+
+                }
+            }
+
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
             logger.error(e.getMessage());
-            
+
         } finally {
             try {
                 if (connection != null) {
@@ -1685,7 +1697,7 @@ public class PTMFlow {
             } catch (SQLException e) {
                 // connection close failed.
                 logger.error(e.getMessage());
-            
+
             }
         }
 
@@ -1702,7 +1714,7 @@ public class PTMFlow {
             } catch (IOException e) {
                 logger.error("Problem adding text: "
                         + e);
-                
+
             }
         }
 
@@ -1959,14 +1971,14 @@ public class PTMFlow {
 
             } catch (SQLException e) {
 
-                logger.error("Error in creatingrefACMTables: "+e.getMessage());
+                logger.error("Error in creatingrefACMTables: " + e.getMessage());
                 if (connection != null) {
                     try {
                         logger.error("Transaction is being rolled back");
-                        
+
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in ACMReferences extraction"+excep);
+                        logger.error("Error in ACMReferences extraction" + excep);
                     }
                 }
             } finally {
@@ -1988,7 +2000,7 @@ public class PTMFlow {
             // it probably means no database file is found
             logger.error(e.getMessage());
         } catch (Exception e) {
-            logger.error("File input error: "+e);
+            logger.error("File input error: " + e);
         } finally {
             try {
                 if (connection != null) {

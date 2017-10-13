@@ -255,7 +255,7 @@ public class DBpediaAnnotator {
 
             Statement statement = connection.createStatement();
             logger.info("Get new publications");
-            statement.setQueryTimeout(600);  // set timeout to 30 sec.
+            statement.setQueryTimeout(800);  // set timeout to 30 sec.
 
             //statement.executeUpdate("create table if not exists PubDBpediaResource (PubId TEXT, ResourceURI TEXT, Support INT) ");
             //String deleteSQL = String.format("Delete from PubDBpediaResource");
