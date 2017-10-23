@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -51,7 +52,7 @@ public class DBpediaAnnotator {
 
     }
 
-      public void getPropValues() throws IOException {
+      public void getPropValues(Map<String,String> runtimeProp) throws IOException {
 
         InputStream inputStream = null;
         try {
@@ -65,7 +66,10 @@ public class DBpediaAnnotator {
             } else {
                 throw new FileNotFoundException("property file '" + propFileName + "' not found in the classpath");
             }
-
+            
+            if (runtimeProp != null) {
+                prop.putAll(runtimeProp);
+            }
            
             SQLConnectionString = prop.getProperty("SQLConnectionString");
             spotlightService = prop.getProperty("SpotlightService");
@@ -325,7 +329,7 @@ public class DBpediaAnnotator {
         Class.forName("org.postgresql.Driver");
         DBpediaAnnotator c = new DBpediaAnnotator();
         logger.info("DBPedia annotation started");
-        c.getPropValues();
+        c.getPropValues(null);
         logger.info("DBPedia annotation: Annotate new publications");
         c.annotatePubs(ExperimentType.OpenAIRE, AnnotatorType.spotlight);
         logger.info("DBPedia annotation: Get extra fields from DBPedia");
