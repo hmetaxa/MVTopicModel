@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
 import org.apache.log4j.Logger;
@@ -216,7 +218,12 @@ public class DBpediaAnnotator {
         }
         
         executor.shutdown();
-
+        
+        try {
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch(InterruptedException e) {
+            throw new RuntimeException("execution was interrupted while awaiting submitted runnables finish", e);
+        }
     }
 
     public void annotatePubs(ExperimentType experimentType, AnnotatorType annotator) {
@@ -321,6 +328,12 @@ public class DBpediaAnnotator {
         }
 
         executor.shutdown();
+        
+        try {
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch(InterruptedException e) {
+            throw new RuntimeException("execution was interrupted while awaiting submitted runnables finish", e);
+        }
     }
 
     public static void main(String[] args) throws Exception {
