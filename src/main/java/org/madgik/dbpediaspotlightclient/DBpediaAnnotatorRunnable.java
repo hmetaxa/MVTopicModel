@@ -236,7 +236,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             resultJSON = new JSONObject(spotlightResponse);
             entities = resultJSON.getJSONArray("Resources");
         } catch (JSONException e) {
-            logger.error(String.format("Invalid response -no resources- from DBpedia Spotlight API for input %s: %s", input, e));
+            //FIXME this is pretty common when no resources were found, not an error though. Log level changed from error to debug. We should check spotlightResponse details and show an appropriate error then.
+            logger.debug(String.format("Invalid response -no resources- from DBpedia Spotlight API for input %s: %s", input, e));
             return resources;
             
         }
@@ -357,8 +358,9 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 final long startDocTime = System.currentTimeMillis();
                 getAndUpdateDetails(resources.get(resource));
                 final long endDocTime = System.currentTimeMillis();
-                logger.info(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, resource, (endDocTime - startDocTime)));
-
+                if (logger.isDebugEnabled()) {
+                    logger.debug(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, resource, (endDocTime - startDocTime)));    
+                }
             }
         }
     }
@@ -673,12 +675,12 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             }
 
         }
-
-        logger.info(String.format("[%s]: Extracted %s entities from %s text items, with %s successes and %s errors. \n", threadId, entities.size(), txt2AnnotatNum, correct, error));
-
-        double avg = (new Double(sum) / txt2AnnotatNum);
-        final long endDocTime = System.currentTimeMillis();
-        logger.info(String.format("[%s]: Extraction time for %s pub: Total:%s ms AvgPerRequest:%s ms \n", threadId, docNum, (endDocTime - startDocTime), avg));
+        if (logger.isDebugEnabled()) {
+            logger.debug(String.format("[%s]: Extracted %s entities from %s text items, with %s successes and %s errors. \n", threadId, entities.size(), txt2AnnotatNum, correct, error));
+            double avg = (new Double(sum) / txt2AnnotatNum);
+            final long endDocTime = System.currentTimeMillis();
+            logger.debug(String.format("[%s]: Extraction time for %s pub: Total:%s ms AvgPerRequest:%s ms \n", threadId, docNum, (endDocTime - startDocTime), avg));
+        }
         return entities;
     }
 
@@ -726,10 +728,12 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             }
         }
         out.close();
-        logger.info(String.format("Extracted entities from %s text items, with %s successes and %s errors. \n", i, correct, error));
-        logger.info("Results saved to: " + outputFile.getAbsolutePath());
-        double avg = (new Double(sum) / i);
-        logger.info(String.format("Average extraction time: %s ms \n", avg * 1000000));
+        if (logger.isDebugEnabled()) {
+            logger.debug(String.format("Extracted entities from %s text items, with %s successes and %s errors. \n", i, correct, error));
+            logger.debug("Results saved to: " + outputFile.getAbsolutePath());
+            double avg = (new Double(sum) / i);
+            logger.debug(String.format("Average extraction time: %s ms \n", avg * 1000000));
+        }
     }
 
     public void evaluate(File inputFile, File outputFile) throws Exception {
