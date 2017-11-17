@@ -217,7 +217,6 @@ public class PTMFlow {
 
                 connection = DriverManager.getConnection(SQLConnectionString);
                 Statement statement = connection.createStatement();
-                statement.setQueryTimeout(60);  // set timeout to 30 sec.
                 statement.executeUpdate(insertTopicDescriptionSql);
                 //ResultSet rs = statement.executeQuery(sql);
 
@@ -383,7 +382,6 @@ public class PTMFlow {
             //connection = DriverManager.getConnection(SQLConnectionString);
             connection = DriverManager.getConnection(SQLConnection);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
             logger.info("Finding key phrases calculation started");
 
@@ -536,7 +534,6 @@ public class PTMFlow {
             if (!SQLConnection.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnection);
                 statement = connection.createStatement();
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
                 statement.executeUpdate("create table if not exists TokensPerEntity (EntityId nvarchar(100), ItemType int, Token nvarchar(100), Counts double, TFIDFCounts double, ExperimentId nvarchar(50)) ");
 
                 statement.executeUpdate("create Index if not exists IX_TokensPerEntity_Entity_Counts ON TokensPerEntity ( EntityId, ExperimentId, ItemType, Counts DESC, TFIDFCounts DESC, Token)");
@@ -739,7 +736,6 @@ public class PTMFlow {
 
             String sql = "select id, ref_id from papers where ref_num >0 ";
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
             ResultSet rs = statement.executeQuery(sql);
             while (rs.next()) {
                 // read the result set
@@ -796,7 +792,6 @@ public class PTMFlow {
 
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
             logger.info("Calc topic similarities started");
 
@@ -821,7 +816,6 @@ public class PTMFlow {
                 String selectVectorSQL = String.format("Select Weight from topicVector where ExperimentId= '%s'  and TopicId=%d order by ColumnId", topicVector.ExperimentId, topicVector.TopicId);
 
                 Statement statement2 = connection.createStatement();
-                statement2.setQueryTimeout(30);  // set timeout to 30 sec.
                 ResultSet rs1 = statement2.executeQuery(selectVectorSQL);
                 int cnt = 0;
                 while (rs1.next()) {
@@ -914,7 +908,6 @@ public class PTMFlow {
             //connection = DriverManager.getConnection(SQLConnectionString);
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
             logger.info("PPRSimilarities calculation Started");
 
@@ -1037,7 +1030,6 @@ public class PTMFlow {
             //connection = DriverManager.getConnection(SQLConnectionString);
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
             logger.info("PPRSimilarities calculation Started");
 
@@ -1167,7 +1159,6 @@ public class PTMFlow {
             //connection = DriverManager.getConnection(SQLConnectionString);
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
             logger.info("similarities calculation Started");
 
@@ -1486,7 +1477,6 @@ public class PTMFlow {
             // get txt data 
             Statement txtstatement = connection.createStatement();
             txtstatement.setFetchSize(10000);
-            txtstatement.setQueryTimeout(800);  // set timeout to 30 sec.
             ResultSet rstxt = txtstatement.executeQuery(txtsql);
 
             while (rstxt.next()) {
@@ -1509,7 +1499,6 @@ public class PTMFlow {
                 logger.info(" Getting side info from the database");
                 Statement statement = connection.createStatement();
                 statement.setFetchSize(10000);
-                statement.setQueryTimeout(800);  // set timeout to 30 sec.
                 ResultSet rs = statement.executeQuery(sql);
 
                 while (rs.next()) {
@@ -1648,7 +1637,6 @@ public class PTMFlow {
                 // get txt data 
                 Statement dbPediastatement = connection.createStatement();
                 dbPediastatement.setFetchSize(10000);
-                dbPediastatement.setQueryTimeout(800);  // set timeout to 30 sec.
                 ResultSet rs = txtstatement.executeQuery("select   pubId,  DBPediaResources from pubviewdbpedia");
 
                 while (rs.next()) {
@@ -1678,7 +1666,6 @@ public class PTMFlow {
                 // get txt data 
                 Statement dbfundingstatement = connection.createStatement();
                 dbfundingstatement.setFetchSize(10000);
-                dbfundingstatement.setQueryTimeout(800);  // set timeout to 30 sec.
                 ResultSet rs = txtstatement.executeQuery("select   pubId,  fundings from pubviewfunding");
 
                 while (rs.next()) {
@@ -1875,8 +1862,6 @@ public class PTMFlow {
                         + "			ref_objid,reftext,primarycategory,othercategory \n"
                         + "			 from ACMData1 \n";
                 // + "			  LIMIT 10";
-
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
                 ResultSet rs = statement.executeQuery(sql);
 

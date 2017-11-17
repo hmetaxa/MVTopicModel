@@ -407,7 +407,6 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.        
 
             PreparedStatement bulkInsert = null;
             /*
@@ -513,7 +512,6 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             //SQLITE String myStatement = " insert or ignore into DBpediaResource (Id, URI, label, wikiId, abstract) Values (?, ?, ?, ?, ?) ";
             String myStatement = " insert into DBpediaResource (Id, URI, label, wikiId, abstract) Values (?, ?, ?, ?, ?) ON CONFLICT (Id) DO NOTHING ";
             PreparedStatement statement = connection.prepareStatement(myStatement);
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.   
             String id = resource.getLink().uri.isEmpty() ? resource.getLink().label : resource.getLink().uri;
 
             statement.setString(1, id);
@@ -525,12 +523,10 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
             if (result > 0) {
                 PreparedStatement deletestatement = connection.prepareStatement("Delete from DBpediaResourceCategory where ResourceId=?");
-                deletestatement.setQueryTimeout(30);  // set timeout to 30 sec.        
                 deletestatement.setString(1, id);
                 deletestatement.executeUpdate();
 
                 deletestatement = connection.prepareStatement("Delete from DBpediaResourceAcronym where ResourceId=?");
-                deletestatement.setQueryTimeout(30);  // set timeout to 30 sec.        
                 deletestatement.setString(1, id);
                 deletestatement.executeUpdate();
 

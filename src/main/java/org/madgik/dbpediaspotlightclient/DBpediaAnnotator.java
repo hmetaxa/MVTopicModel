@@ -142,7 +142,6 @@ public class DBpediaAnnotator {
                     "select distinct Resource from pubDBpediaResource where Resource not in (select URI from DBpediaResource) ";
 
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(600);  // set timeout to 30 sec.
 
             ResultSet rs = statement.executeQuery(sql);
 
@@ -266,7 +265,6 @@ public class DBpediaAnnotator {
 
             Statement statement = connection.createStatement();
             logger.info("Get new publications");
-            statement.setQueryTimeout(800);  // set timeout to 30 sec.
 
             //statement.executeUpdate("create table if not exists PubDBpediaResource (PubId TEXT, ResourceURI TEXT, Support INT) ");
             //String deleteSQL = String.format("Delete from PubDBpediaResource");
