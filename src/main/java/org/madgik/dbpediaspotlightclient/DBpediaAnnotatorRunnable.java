@@ -341,23 +341,56 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
     public void run() {
 
+        final int logBatchSize = 10000;
+        
         if (annotate && pubs != null) {
+            
+            int counter = 0;
+            long batchEntitiesRetrievalExecutionTime = 0;
+            long batchEntitiesSavingExecutionTime = 0;
+            
             for (int doc = startDoc;
                     doc < pubs.size() && doc < startDoc + numDocs;
                     doc++) {
+                counter++;
                 pubText pub = pubs.get(doc);
+                long entitiesRetrievalStartTime = System.currentTimeMillis();
                 List<DBpediaResource> entities = getDBpediaEntities(pub.getText(), annotator, doc - startDoc);
+                long inbetweenTime = System.currentTimeMillis();
+                batchEntitiesRetrievalExecutionTime += inbetweenTime - entitiesRetrievalStartTime;
                 saveDBpediaEntities(SQLLitedb, entities, pub.getPubId(), annotator);
+                batchEntitiesSavingExecutionTime += System.currentTimeMillis() - inbetweenTime;
                 
+                if (counter % logBatchSize == 0) {
+                    logger.info(String.format("time taken to retrieve dbpedia entities for a batch of %s publications: %s secs", 
+                            logBatchSize, batchEntitiesRetrievalExecutionTime / 1000));
+                    logger.info(String.format("time taken to store dbpedia entities for a batch of %s publications: %s secs", 
+                            logBatchSize, batchEntitiesSavingExecutionTime / 1000));
+                    batchEntitiesRetrievalExecutionTime = 0;
+                    batchEntitiesSavingExecutionTime = 0;
+                }
             }
         } else if (resources != null) {
+
+            int counter = 0;
+            long batchUpdateResourceExecutionTime = 0;
+
             for (int resource = startDoc;
                     resource < resources.size() && resource < startDoc + numDocs;
                     resource++) {
 
+                counter++;
                 final long startDocTime = System.currentTimeMillis();
                 getAndUpdateDetails(resources.get(resource));
                 final long endDocTime = System.currentTimeMillis();
+                batchUpdateResourceExecutionTime += endDocTime - startDocTime;
+                
+                if (counter % logBatchSize == 0) {
+                    logger.info(String.format("time taken to update resources details for a batch of %s resources: %s secs", 
+                            logBatchSize, batchUpdateResourceExecutionTime / 1000));
+                    batchUpdateResourceExecutionTime = 0;
+                }
+                
                 if (logger.isDebugEnabled()) {
                     logger.debug(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, resource, (endDocTime - startDocTime)));    
                 }
