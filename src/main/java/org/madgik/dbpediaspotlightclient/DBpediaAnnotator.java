@@ -139,7 +139,9 @@ public class DBpediaAnnotator {
             connection = DriverManager.getConnection(SQLLitedb);
             String sql = 
                     //"select  URI as Resource from DBpediaResource where Label=''";
-                    "select distinct Resource from pubDBpediaResource where Resource not in (select URI from DBpediaResource) ";
+                    //"select distinct Resource from pubDBpediaResource where Resource not in (select URI from DBpediaResource) ";
+                    //optimized query: hashing is much faster than seq scan
+                    "select distinct Resource from pubDBpediaResource EXCEPT select URI from DBpediaResource ";
 
             Statement statement = connection.createStatement();
 
@@ -259,7 +261,9 @@ public class DBpediaAnnotator {
                 sql = " select pubId, TEXT, GrantIds, Funders, Areas, AreasDescr, Venue from OpenAIREPubView";// LIMIT 100000";
             }
             else if (experimentType == ExperimentType.OpenAIRE) {
-                sql = "select pubId, text, fulltext, keywords from pubview WHERE  PubView.PubId NOT IN (select distinct pubId from pubdbpediaresource)";// LIMIT 100000";
+                // sql = "select pubId, text, fulltext, keywords from pubview WHERE  PubView.PubId NOT IN (select distinct pubId from pubdbpediaresource)";// LIMIT 100000";
+                // optimized query: hashing is much faster than seq scan
+                sql = "select pubview.pubId, text, fulltext, keywords from pubview LEFT JOIN pubdbpediaresource ON (pubview.pubId = pubdbpediaresource.pubId) where pubdbpediaresource.pubId is null";
             }
             
 
