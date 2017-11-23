@@ -16,6 +16,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import org.madgik.utils.CSV2FeatureSequence;
@@ -89,11 +91,17 @@ public class PTMFlow {
 
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
 
-        String experimentId = experimentType.toString() + "_" + numTopics + "T_"
+        String experimentString = experimentType.toString() + "_" + numTopics + "T_"
                 + numIterations + "IT_" + numChars + "CHRs_" + pruneCnt + "_" + pruneLblCnt + "PRN" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
 
-        String experimentDescription = experimentId + ": \n";
+        String experimentDescription = experimentString + ": \n";
 
+        String experimentId = runtimeProp.get("ExperimentId");
+        
+        if (StringUtils.isBlank(experimentId)) {
+            experimentId = experimentString;
+        }
+        
         String dictDir = "";
 
         Connection connection = null;
