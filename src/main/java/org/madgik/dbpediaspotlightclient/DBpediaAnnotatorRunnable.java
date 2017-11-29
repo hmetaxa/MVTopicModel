@@ -17,9 +17,6 @@ package org.madgik.dbpediaspotlightclient;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
-import org.apache.commons.httpclient.Header;
-import org.apache.commons.httpclient.methods.GetMethod;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -39,11 +36,15 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+
 import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
+import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.httpclient.HttpStatus;
+import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.params.HttpMethodParams;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
@@ -57,14 +58,15 @@ import org.madgik.dbpediaspotlightclient.DBpediaAnnotator.AnnotatorType;
  */
 public class DBpediaAnnotatorRunnable implements Runnable {
 
+    public static final String RESOURCE_POISON = "$poison$";
+    
     public static Logger logger = Logger.getLogger(DBpediaAnnotator.class.getName());
     int startDoc, numDocs;
-    List<pubText> pubs = null;
-    List<String> resources = null;
+    final BlockingQueue<pubText> pubsQueue;
+    final BlockingQueue<String> resourcesQueue;
     String SQLLitedb = "";
     AnnotatorType annotator;
     int threadId = 0;
-    boolean annotate = true;    
     String spotlightService;
     double confidence; 
 
@@ -72,17 +74,14 @@ public class DBpediaAnnotatorRunnable implements Runnable {
     private final HttpClient httpClient;
 
     public DBpediaAnnotatorRunnable(
-            int startDoc, int numDocs, String SQLLitedb, AnnotatorType annotator,
-            List<pubText> pubs, int threadId, HttpClient httpClient, List<String> resources, boolean annotate, String spotlightService, double confidence ) {
-        this.numDocs = numDocs;
-        this.startDoc = startDoc;
-        this.pubs = pubs;
+            String SQLLitedb, AnnotatorType annotator,
+            BlockingQueue<pubText> pubs, int threadId, HttpClient httpClient, BlockingQueue<String> resources, String spotlightService, double confidence ) {
+        this.pubsQueue = pubs;
         this.SQLLitedb = SQLLitedb;
         this.annotator = annotator;
         this.threadId = threadId;
         this.httpClient = httpClient;
-        this.annotate = annotate;
-        this.resources = resources;
+        this.resourcesQueue = resources;
         this.spotlightService = spotlightService;
         this.confidence = confidence;
         
@@ -343,58 +342,69 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
         final int logBatchSize = 10000;
         
-        if (annotate && pubs != null) {
+        if (pubsQueue != null) {
             
             int counter = 0;
             long batchEntitiesRetrievalExecutionTime = 0;
             long batchEntitiesSavingExecutionTime = 0;
             
-            for (int doc = startDoc;
-                    doc < pubs.size() && doc < startDoc + numDocs;
-                    doc++) {
-                counter++;
-                pubText pub = pubs.get(doc);
-                long entitiesRetrievalStartTime = System.currentTimeMillis();
-                List<DBpediaResource> entities = getDBpediaEntities(pub.getText(), annotator, doc - startDoc);
-                long inbetweenTime = System.currentTimeMillis();
-                batchEntitiesRetrievalExecutionTime += inbetweenTime - entitiesRetrievalStartTime;
-                saveDBpediaEntities(SQLLitedb, entities, pub.getPubId(), annotator);
-                batchEntitiesSavingExecutionTime += System.currentTimeMillis() - inbetweenTime;
-                
-                if (counter % logBatchSize == 0) {
-                    logger.info(String.format("time taken to retrieve dbpedia entities for a batch of %s publications: %s secs", 
-                            logBatchSize, batchEntitiesRetrievalExecutionTime / 1000));
-                    logger.info(String.format("time taken to store dbpedia entities for a batch of %s publications: %s secs", 
-                            logBatchSize, batchEntitiesSavingExecutionTime / 1000));
-                    batchEntitiesRetrievalExecutionTime = 0;
-                    batchEntitiesSavingExecutionTime = 0;
+            pubText currentPubText; 
+            
+            try {
+                while (!((currentPubText = pubsQueue.take()) instanceof PubTextPoison)) {
+                    counter++;
+                    long entitiesRetrievalStartTime = System.currentTimeMillis();
+                    List<DBpediaResource> entities = getDBpediaEntities(currentPubText.getText(), annotator);
+                    long inbetweenTime = System.currentTimeMillis();
+                    batchEntitiesRetrievalExecutionTime += inbetweenTime - entitiesRetrievalStartTime;
+                    saveDBpediaEntities(SQLLitedb, entities, currentPubText.getPubId(), annotator);
+                    batchEntitiesSavingExecutionTime += System.currentTimeMillis() - inbetweenTime;
+                    
+                    if (counter % logBatchSize == 0) {
+                        logger.info(String.format("time taken to retrieve dbpedia entities for a batch of %s publications: %s secs", 
+                                logBatchSize, batchEntitiesRetrievalExecutionTime / 1000));
+                        logger.info(String.format("time taken to store dbpedia entities for a batch of %s publications: %s secs", 
+                                logBatchSize, batchEntitiesSavingExecutionTime / 1000));
+                        batchEntitiesRetrievalExecutionTime = 0;
+                        batchEntitiesSavingExecutionTime = 0;
+                    }
                 }
+            } catch (InterruptedException e) {
+                logger.warn("got interrupted exception", e);
+            } finally {
+                logger.info("annotation thread has finished");
             }
-        } else if (resources != null) {
+        } else if (resourcesQueue != null) {
 
             int counter = 0;
             long batchUpdateResourceExecutionTime = 0;
-
-            for (int resource = startDoc;
-                    resource < resources.size() && resource < startDoc + numDocs;
-                    resource++) {
-
-                counter++;
-                final long startDocTime = System.currentTimeMillis();
-                getAndUpdateDetails(resources.get(resource));
-                final long endDocTime = System.currentTimeMillis();
-                batchUpdateResourceExecutionTime += endDocTime - startDocTime;
-                
-                if (counter % logBatchSize == 0) {
-                    logger.info(String.format("time taken to update resources details for a batch of %s resources: %s secs", 
-                            logBatchSize, batchUpdateResourceExecutionTime / 1000));
-                    batchUpdateResourceExecutionTime = 0;
-                }
-                
-                if (logger.isDebugEnabled()) {
-                    logger.debug(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, resource, (endDocTime - startDocTime)));    
-                }
+            
+            String currentResource;
+            
+            try {
+                while (!RESOURCE_POISON.equals((currentResource = resourcesQueue.take()))) {
+                    counter++;
+                    final long startDocTime = System.currentTimeMillis();
+                    getAndUpdateDetails(currentResource);
+                    final long endDocTime = System.currentTimeMillis();
+                    batchUpdateResourceExecutionTime += endDocTime - startDocTime;
+                    
+                    if (counter % logBatchSize == 0) {
+                        logger.info(String.format("time taken to update resources details for a batch of %s resources: %s secs", 
+                                logBatchSize, batchUpdateResourceExecutionTime / 1000));
+                        batchUpdateResourceExecutionTime = 0;
+                    }
+                    
+                    if (logger.isDebugEnabled()) {
+                        logger.debug(String.format("[%s]: Extraction time for %s resource: %s ms  \n", threadId, currentResource, (endDocTime - startDocTime)));    
+                    }
+                }    
+            } catch (InterruptedException e) {
+                logger.warn("got interrupted exception", e);
+            } finally {
+                logger.info("resource update thread has finished");
             }
+            
         }
     }
 
@@ -655,7 +665,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
     }
 
-    public List<DBpediaResource> getDBpediaEntities(String text, AnnotatorType annotator, int docNum) {
+    public List<DBpediaResource> getDBpediaEntities(String text, AnnotatorType annotator) {
 
         LineParser parser = new LineParser.ManualDatasetLineParser();
         List<DBpediaResource> entities = new ArrayList<DBpediaResource>();
@@ -712,7 +722,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             logger.debug(String.format("[%s]: Extracted %s entities from %s text items, with %s successes and %s errors. \n", threadId, entities.size(), txt2AnnotatNum, correct, error));
             double avg = (new Double(sum) / txt2AnnotatNum);
             final long endDocTime = System.currentTimeMillis();
-            logger.debug(String.format("[%s]: Extraction time for %s pub: Total:%s ms AvgPerRequest:%s ms \n", threadId, docNum, (endDocTime - startDocTime), avg));
+            logger.debug(String.format("[%s]: Extraction time for pub: Total:%s ms AvgPerRequest:%s ms \n", threadId, (endDocTime - startDocTime), avg));
         }
         return entities;
     }

@@ -14,10 +14,10 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -130,29 +130,52 @@ public class DBpediaAnnotator {
 //        return SQLLitedb;
 //    }
 
-    public List<String> getNewResources(ExperimentType experimentType, String SQLLitedb) {
-        List<String> URIs = new ArrayList<String>();
+    public void updateResourceDetails(ExperimentType experimentType) {
 
-        //String SQLLitedb = getSQLLitedb(experimentType, false);
+        MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
+
+        // Passing it to the HttpClient.
+        HttpClient httpClient = new HttpClient(connectionManager);
+
+        logger.info(String.format("Get new resources"));
+
+        ExecutorService executor = Executors.newFixedThreadPool(numOfThreads);
+        
         Connection connection = null;
+        
+        int queueSize = 100;
+        
+        BlockingQueue<String> newURIsQueue = new ArrayBlockingQueue<String>(queueSize);
+        
+        logger.info(String.format("Get extra fields from dbpedia.org using %d threads", numOfThreads));
+        
         try {
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
             String sql = 
                     //"select  URI as Resource from DBpediaResource where Label=''";
                     //"select distinct Resource from pubDBpediaResource where Resource not in (select URI from DBpediaResource) ";
                     //optimized query: hashing is much faster than seq scan
                     "select distinct Resource from pubDBpediaResource EXCEPT select URI from DBpediaResource ";
 
+            connection.setAutoCommit(false);
             Statement statement = connection.createStatement();
+            statement.setFetchSize(queueSize);
 
+            for (int thread = 0; thread < numOfThreads; thread++) {
+                executor.submit(new DBpediaAnnotatorRunnable(
+                        SQLConnectionString, null,
+                        null, thread, httpClient, newURIsQueue, spotlightService, confidence
+                ));
+            }
+            
             ResultSet rs = statement.executeQuery(sql);
-
+            
             while (rs.next()) {
-
-                String URI = rs.getString("Resource");
-
-                URIs.add(URI);
-
+                newURIsQueue.put(rs.getString("Resource"));
+            }
+            
+            for (int i = 0; i < numOfThreads; i++) {
+                newURIsQueue.put(DBpediaAnnotatorRunnable.RESOURCE_POISON);  
             }
 
         } catch (SQLException e) {
@@ -160,6 +183,15 @@ public class DBpediaAnnotator {
             // it probably means no database file is found
             logger.error(e.getMessage());
             
+        } catch (InterruptedException e) {
+            logger.error("thread was interrupted, shutting down obtaining new resources phase", e);
+            for (int i = 0; i < numOfThreads; i++) {
+                try {
+                    newURIsQueue.put(DBpediaAnnotatorRunnable.RESOURCE_POISON);
+                } catch (InterruptedException e1) {
+                    logger.error("got interrupted while sending poison to worker threads", e1);
+                }    
+            }
         } finally {
             try {
                 if (connection != null) {
@@ -171,53 +203,7 @@ public class DBpediaAnnotator {
                 
             }
         }
-        return URIs;
 
-    }
-
-    public void updateResourceDetails(ExperimentType experimentType) {
-
-        MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
-
-        // Passing it to the HttpClient.
-        HttpClient httpClient = new HttpClient(connectionManager);
-
-        logger.info(String.format("Get new resources"));
-        List<String> newURIs = getNewResources(experimentType, SQLConnectionString);
-        //List<String> newURIs = new ArrayList<String>(); // getNewResources(experimentType, SQLLitedb);
-        //newURIs.add("http://dbpedia.org/resource/Artificial_intelligence");
-
-        ExecutorService executor = Executors.newFixedThreadPool(numOfThreads);
-
-        DBpediaAnnotatorRunnable[] runnables = new DBpediaAnnotatorRunnable[numOfThreads];
-
-        int docsPerThread = newURIs.size() / numOfThreads;
-        int offset = 0;
-        
-        logger.info(String.format("Get extra fields from dbpedia.org using %d threads", numOfThreads));
-        
-        for (int thread = 0; thread < numOfThreads; thread++) {
-
-            // some docs may be missing at the end due to integer division
-            if (thread == numOfThreads - 1) {
-                docsPerThread = newURIs.size() - offset;
-            }
-
-            runnables[thread] = new DBpediaAnnotatorRunnable(
-                    offset, docsPerThread, SQLConnectionString, null,
-                    null, thread, httpClient, newURIs, false, spotlightService, confidence
-            );
-
-            offset += docsPerThread;
-
-        }
-
-        for (int thread = 0; thread < numOfThreads; thread++) {
-
-            executor.submit(runnables[thread]);
-
-        }
-        
         executor.shutdown();
         
         try {
@@ -235,11 +221,16 @@ public class DBpediaAnnotator {
         // Passing it to the HttpClient.
         HttpClient httpClient = new HttpClient(connectionManager);
 
-        List<pubText> pubs = new ArrayList<pubText>();
-
         //String SQLLitedb = getSQLLitedb(experimentType, false);
 
+        ExecutorService executor = Executors.newFixedThreadPool(numOfThreads);
+        
         Connection connection = null;
+        
+        int queueSize = 10;
+        
+        BlockingQueue<pubText> pubsQueue = new ArrayBlockingQueue<pubText>(queueSize);
+        
         try {
             connection = DriverManager.getConnection(SQLConnectionString);
             String sql = "";
@@ -266,28 +257,48 @@ public class DBpediaAnnotator {
                 sql = "select pubview.pubId, text, fulltext, keywords from pubview LEFT JOIN pubdbpediaresource ON (pubview.pubId = pubdbpediaresource.pubId) where pubdbpediaresource.pubId is null";
             }
             
-
+            connection.setAutoCommit(false);
             Statement statement = connection.createStatement();
+            statement.setFetchSize(queueSize);
             logger.info("Get new publications");
 
             //statement.executeUpdate("create table if not exists PubDBpediaResource (PubId TEXT, ResourceURI TEXT, Support INT) ");
             //String deleteSQL = String.format("Delete from PubDBpediaResource");
             //statement.executeUpdate(deleteSQL);
+
+            logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, spotlightService, confidence));
+            
+            for (int thread = 0; thread < numOfThreads; thread++) {
+                executor.submit(new DBpediaAnnotatorRunnable(
+                        SQLConnectionString, annotator,
+                        pubsQueue, thread, httpClient, null, spotlightService,confidence));
+            }
+            
             ResultSet rs = statement.executeQuery(sql);
-
+            
             while (rs.next()) {
-
                 String txt = rs.getString("keywords") + "\n" + rs.getString("text");
                 String pubId = rs.getString("pubId");
-
-                pubs.add(new pubText(pubId, txt));
-
+                pubsQueue.put(new pubText(pubId, txt));
+            }
+            
+            for (int i = 0; i < numOfThreads; i++) {
+                pubsQueue.put(new PubTextPoison());    
             }
 
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
             logger.error(e.getMessage());
+        } catch (InterruptedException e) {
+            logger.error("thread was interrupted, shutting down annotation phase", e);
+            for (int i = 0; i < numOfThreads; i++) {
+                try {
+                    pubsQueue.put(new PubTextPoison());
+                } catch (InterruptedException e1) {
+                    logger.error("got interrupted while sending poison to worker threads", e1);
+                }    
+            }
         } finally {
             try {
                 if (connection != null) {
@@ -297,36 +308,6 @@ public class DBpediaAnnotator {
                 // connection close failed.
                 logger.error(e.getMessage());
             }
-        }
-
-        ExecutorService executor = Executors.newFixedThreadPool(numOfThreads);
-
-        DBpediaAnnotatorRunnable[] runnables = new DBpediaAnnotatorRunnable[numOfThreads];
-
-        int docsPerThread = pubs.size() / numOfThreads;
-        int offset = 0;
-        logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, spotlightService, confidence));
-        
-        for (int thread = 0; thread < numOfThreads; thread++) {
-
-            // some docs may be missing at the end due to integer division
-            if (thread == numOfThreads - 1) {
-                docsPerThread = pubs.size() - offset;
-            }
-
-            runnables[thread] = new DBpediaAnnotatorRunnable(
-                    offset, docsPerThread, SQLConnectionString, annotator,
-                    pubs, thread, httpClient, null, true, spotlightService,confidence
-            );
-
-            offset += docsPerThread;
-
-        }
-
-        for (int thread = 0; thread < numOfThreads; thread++) {
-
-            executor.submit(runnables[thread]);
-
         }
 
         executor.shutdown();
