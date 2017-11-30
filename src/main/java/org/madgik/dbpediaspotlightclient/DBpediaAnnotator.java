@@ -134,6 +134,7 @@ public class DBpediaAnnotator {
 
         MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
 
+
         // Passing it to the HttpClient.
         HttpClient httpClient = new HttpClient(connectionManager);
 
@@ -217,7 +218,9 @@ public class DBpediaAnnotator {
 
         // Creating MultiThreadedHttpConnectionManager
         MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
-
+        connectionManager.getParams().setDefaultMaxConnectionsPerHost(20);
+        connectionManager.getParams().setMaxTotalConnections(200);
+        
         // Passing it to the HttpClient.
         HttpClient httpClient = new HttpClient(connectionManager);
 

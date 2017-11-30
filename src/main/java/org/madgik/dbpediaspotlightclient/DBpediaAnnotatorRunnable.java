@@ -340,7 +340,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
     public void run() {
 
-        final int logBatchSize = 10000;
+        final int logBatchSize = 1000;
         
         if (pubsQueue != null) {
             
