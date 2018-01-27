@@ -2,9 +2,9 @@
 Omiros Metaxas
 
 ### General Notes
-Non-parametric Multi-View Topic Model (MV-HDP) that extends well-established Hierarchical Dirichlet Process (HDP) 
+Non-parametric Multi-View Topic Model (MViHDP) that extends well-established Hierarchical Dirichlet Process (HDP) 
 incorporating a novel Interacting Pólya Urn scheme (IUM) to model per-document topic distribution. 
-This way, MV-HDP combines interaction and reinforcement addressing the following major challenges: 
+This way, MViHDP combines interaction and reinforcement addressing the following major challenges: 
 1) multi-view modeling leveraging statistical strength among different views, 
 2) estimation and adaptation to the extent of correlation between the different views that is automatically inferred during inference and 
 3) scalable inference on massive, real world datasets. The latter is achieved through a parallel Gibbs sampling scheme that utilizes efficient F+Tree data structure. 
