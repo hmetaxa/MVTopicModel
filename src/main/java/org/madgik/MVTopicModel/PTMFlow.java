@@ -82,6 +82,10 @@ public class PTMFlow {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
 
     public PTMFlow() throws IOException {
+        this(null);
+    }
+    
+    public PTMFlow(Map<String,String> runtimeProp) throws IOException {
 
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
 
@@ -93,9 +97,9 @@ public class PTMFlow {
         String dictDir = "";
 
         Connection connection = null;
-
-        getPropValues();
-
+        
+        getPropValues(runtimeProp);    
+        
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
         }
@@ -249,7 +253,7 @@ public class PTMFlow {
 
     }
 
-    public void getPropValues() throws IOException {
+    public void getPropValues(Map<String,String> runtimeProp) throws IOException {
 
         InputStream inputStream = null;
         try {
@@ -264,6 +268,10 @@ public class PTMFlow {
                 throw new FileNotFoundException("property file '" + propFileName + "' not found in the classpath");
             }
 
+            if (runtimeProp != null) {
+                prop.putAll(runtimeProp);
+            }
+            
             // get the property value and print it out
             numTopics = Integer.parseInt(prop.getProperty("TopicsNumber"));
             topWords = Integer.parseInt(prop.getProperty("TopWords"));
