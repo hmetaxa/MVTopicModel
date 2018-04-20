@@ -253,7 +253,6 @@ public class WordEmbeddings {
             if (!SQLLiteDB.isEmpty()) {
                 connection = DriverManager.getConnection(SQLLiteDB);
                 statement = connection.createStatement();
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
                 statement.executeUpdate("drop table if exists WordVector");
                 statement.executeUpdate("create table if not exists WordVector (Word nvarchar(50), ColumnId Integer, Weight Double, modality int ) ");
                 //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));

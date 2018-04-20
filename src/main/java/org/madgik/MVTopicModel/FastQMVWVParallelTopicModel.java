@@ -399,7 +399,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     sql = "select word, ColumnId, weight, modality from WordVector order by modality, word, columnId";
 
                     Statement statement = connection.createStatement();
-                    statement.setQueryTimeout(60);  // set timeout to 30 sec.
                     ResultSet rs = statement.executeQuery(sql);
 
                     while (rs.next()) {
@@ -1479,7 +1478,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLLiteDB.isEmpty()) {
                 connection = DriverManager.getConnection(SQLLiteDB);
                 statement = connection.createStatement();
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
                 //statement.executeUpdate("drop table if exists TopicAnalysis");
                 //statement.executeUpdate("create table if not exists Experiment (ExperimentId nvarchar(50), Description nvarchar(200), Metadata nvarchar(500), InitialSimilarity Double, PhraseBoost Integer) ");
                 //String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
@@ -1570,7 +1568,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLLiteDB.isEmpty()) {
                 connection = DriverManager.getConnection(SQLLiteDB);
                 statement = connection.createStatement();
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
                 //statement.executeUpdate("create table if not exists TopicDetails (TopicId integer, ItemType integer,  Weight double, TotalTokens int, BatchId TEXT,ExperimentId nvarchar(50)) ");
                 //String deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
@@ -2768,7 +2765,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLLiteDB.isEmpty()) {
                 connection = DriverManager.getConnection(SQLLiteDB);
                 statement = connection.createStatement();
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
                 // statement.executeUpdate("drop table if exists PubTopic");
                 //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
                 //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
@@ -2910,7 +2906,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLLiteDB.isEmpty()) {
                 connection = DriverManager.getConnection(SQLLiteDB);
                 statement = connection.createStatement();
-                statement.setQueryTimeout(30);  // set timeout to 30 sec.
                 // statement.executeUpdate("drop table if exists PubTopic");
                 //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
                 statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));

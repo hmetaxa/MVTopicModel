@@ -611,7 +611,6 @@ public class FastQMVWVTopicModelDiagnostics {
 
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
-            statement.setQueryTimeout(30);  // set timeout to 30 sec.
 
             PreparedStatement bulkInsert = null;
             String sql = "insert into expDiagnostics values(?,?,?,?,?,?);";
