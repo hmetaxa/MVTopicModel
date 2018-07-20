@@ -326,7 +326,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             //this.typeVectors = new double[][]; // Vector representations for tokens per modality <modality, token, vector>
             this.typeVectors = new double[alphabet[0].size()][vectorSize];
 
-            this.typeTopicSimilarity = new int[alphabet[0].size()][numTopics][numTopics + 1];
+            this.typeTopicSimilarity = new int[alphabet[0].size()][numTopics][numTopics];
 
             for (int i = 0; i < alphabet[0].size(); i++) {
                 for (int j = 0; j < numTopics; j++) {
@@ -377,7 +377,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         if (useTypeVectors) {
             this.vectorSize = vectorSize;
 
-            this.typeTopicSimilarity = new int[alphabet[0].size()][numTopics][numTopics + 1];
+            this.typeTopicSimilarity = new int[alphabet[0].size()][numTopics][numTopics];
 
             for (int i = 0; i < alphabet[0].size(); i++) {
                 for (int j = 0; j < numTopics; j++) {
@@ -459,13 +459,50 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             double[] topicVectorsW = CalcTopicVectorBasedOnWords(maxNumWords, topic);
 
             for (int w = 0; w < alphabet[0].size(); w++) {
+                System.arraycopy(typeVectors[w], 0, totalTypeVector, 0, vectorSize);
+                System.arraycopy(topicVectors[topic], 0, totalTypeVector, vectorSize, vectorSize);
+
                 for (int t = 0; t < numTopics; t++) {
 
                     if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
                     {
 
-                        System.arraycopy(typeVectors[w], 0, totalTypeVector, 0, vectorSize);
-                        System.arraycopy(topicVectors[topic], 0, totalTypeVector, vectorSize, vectorSize);
+                        System.arraycopy(topicVectorsW, 0, totalTopicVector, 0, vectorSize);
+                        System.arraycopy(topicVectors[t], 0, totalTopicVector, vectorSize, vectorSize);
+
+                        //ArrayUtils.append(topicVectorsW, topicVectors[t]);
+                        double similarity = Math.max(Utils.cosineSimilarity(totalTopicVector, totalTypeVector), 0);
+                        typeTopicSimilarity[w][topic][t] += Math.round(similarity * 1000); //cumulative similarities 
+                        //totalTypeVector = null;
+                        //totalTopicVector = null;
+
+                    }
+
+                }
+            }
+        }
+    }
+    
+      private void CalcTopicTypeVectorSimilarities2(int maxNumWords) {
+
+          //TODO: WordVector = SUM(WeightInTopic * TopicVector) + WordVector
+          // TopicVector = TopicVector + SUM(WeightOfMostSignificantWordsInTopic * WordVector) 
+          // Update this either on line or once per cycle 
+          
+        double[] totalTopicVector = new double[2 * vectorSize];
+        double[] totalTypeVector = new double[2 * vectorSize]; //
+
+        for (int topic = 0; topic < numTopics; topic++) {
+            double[] topicVectorsW = CalcTopicVectorBasedOnWords(maxNumWords, topic);
+
+            for (int w = 0; w < alphabet[0].size(); w++) {
+                System.arraycopy(typeVectors[w], 0, totalTypeVector, 0, vectorSize);
+                System.arraycopy(topicVectors[topic], 0, totalTypeVector, vectorSize, vectorSize);
+
+                for (int t = 0; t < numTopics; t++) {
+
+                    if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
+                    {
 
                         System.arraycopy(topicVectorsW, 0, totalTopicVector, 0, vectorSize);
                         System.arraycopy(topicVectors[t], 0, totalTopicVector, vectorSize, vectorSize);
@@ -2867,9 +2904,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                 if (connection != null) {
                     try {
+                        logger.error(e.getMessage());
                         System.err.print("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
+                        logger.error(excep.getMessage());
                         System.err.print("Error in insert topicAnalysis");
                     }
                 }
@@ -2884,6 +2923,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
+            logger.error(e.getMessage());
             System.err.println(e.getMessage());
         } finally {
             try {
@@ -2892,6 +2932,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 }
             } catch (SQLException e) {
                 // connection close failed.
+                logger.error(e.getMessage());
                 System.err.println(e);
             }
 
