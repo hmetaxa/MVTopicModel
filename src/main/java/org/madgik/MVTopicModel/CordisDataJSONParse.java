@@ -19,9 +19,11 @@ import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Iterator;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -47,6 +49,51 @@ public class CordisDataJSONParse {
         }
     }
 
+    public class Publication {
+
+        public String pmId;
+        public String pmcId;
+        public String DOI;
+        //public String Date;
+        public String Year;
+        public String Title;
+        public String Abstract;
+        public String Repository;
+        public List<String> MeSHTerms;
+        //public List<TermMention> DiseaseList;
+        //public List<TermMention> ChemicalList;
+        public List<String> KeywordList;
+//        public List<String> InsightList;
+
+        public Publication(String pmcId,
+                String pmId,
+                String DOI,
+                //String Date,
+                String Year,
+                String Title,
+                String Abstract,
+                List<String> MeSHTerms,
+                //List<TermMention> DiseaseList,
+                //List<TermMention> ChemicalList,
+                List<String> KeywordList
+        //        List<String> InsightList
+        ) {
+            this.pmId = pmId;
+            this.pmcId = pmcId;
+            this.DOI = DOI;
+            //this.Date = Date;
+            this.Year = Year;
+            this.Title = Title;
+            this.Abstract = Abstract;
+            this.MeSHTerms = MeSHTerms;
+            //this.DiseaseList = DiseaseList;
+            //this.ChemicalList = ChemicalList;
+            this.KeywordList = KeywordList;
+            //this.InsightList = InsightList;
+
+        }
+    }
+
     public class Project {
 
         public String Call;
@@ -62,13 +109,14 @@ public class CordisDataJSONParse {
 
         public String Cordis_link;
 
-        public List<TermMention> DiseaseList = new ArrayList<TermMention>();
-        public List<TermMention> ChemicalList = new ArrayList<TermMention>();
-        public List<TermMention> KeywordList = new ArrayList<TermMention>();
-        public List<String> InsightList = new ArrayList<String>();
-        public List<TermMention> Paper_mesh_termList = new ArrayList<TermMention>();
-        public List<String> TermList = new ArrayList<String>();
+        public List<Publication> PublicationList;
 
+        //public List<TermMention> DiseaseList;
+        //public List<TermMention> ChemicalList;
+        //public List<TermMention> KeywordList;
+        //public List<String> InsightList;
+        //public List<TermMention> Paper_mesh_termList;
+        //public List<String> TermList;
         @Override
         public boolean equals(Object obj) {
             if (obj == this) {
@@ -96,12 +144,13 @@ public class CordisDataJSONParse {
                 String title,
                 String project_objective,
                 String cordis_link,
-                List<TermMention> diseaseList,
-                List<TermMention> keywordList,
-                List<String> insightList,
-                List<TermMention> paper_mesh_termList,
-                List<String> termList,
-                List<TermMention> chemicalList) {
+                //List<TermMention> diseaseList,
+                //List<TermMention> keywordList,
+                //List<String> insightList,
+                //List<TermMention> paper_mesh_termList,
+                //List<String> termList,
+                //List<TermMention> chemicalList,
+                List<Publication> publicationList) {
 
             this.Call = call;
             this.Funded_under = funded_under;
@@ -114,12 +163,13 @@ public class CordisDataJSONParse {
             this.Project_objective = project_objective;
             this.Cordis_link = cordis_link;
 
-            this.DiseaseList = diseaseList;
+            /*this.DiseaseList = diseaseList;
             this.KeywordList = keywordList;
             this.ChemicalList = chemicalList;
             this.InsightList = insightList;
             this.Paper_mesh_termList = paper_mesh_termList;
-            this.TermList = termList;
+            this.TermList = termList;*/
+            this.PublicationList = publicationList;
 
         }
 
@@ -189,73 +239,181 @@ public class CordisDataJSONParse {
 
                     // Convert JSON string to JSONObject
                     JSONObject resultJSON = new JSONObject(content);
-                    String call = resultJSON.getString("call");
-                    String funded_under = resultJSON.getString("funded_under");
-                    String project_id = resultJSON.getString("project_id");
-                    String acronym = resultJSON.getString("acronym");
-                    String date_from = resultJSON.getString("date_from");
-                    String date_to = resultJSON.getString("date_to");
+                    JSONObject administrativeData = resultJSON.getJSONObject("administrative_data");
 
-                    String report_summary = resultJSON.getString("report_summary");
-                    String title = resultJSON.getString("title");
-                    String project_objective = resultJSON.getString("project_objective");
+                    String call = administrativeData.getString("call");
+                    String funded_under = administrativeData.getString("funded_under");
+                    String project_id = administrativeData.getString("project_id");
+                    String acronym = administrativeData.getString("acronym");
+                    String date_from = administrativeData.getString("date_from");
+                    String date_to = administrativeData.getString("date_to");
+                    String year = date_from.split("-")[0];
+                    String cordis_link = administrativeData.getString("cordis_link");
 
-                    String cordis_link = resultJSON.getString("cordis_link");
+                    JSONObject sections = resultJSON.getJSONObject("sections");
+                    String title = "";
+                    String project_objective = "";
+                    String report_summary = "";
+                    List<String> sectionsList = new ArrayList<String>();
 
-                    List<TermMention> diseaseList = new ArrayList<TermMention>();
-                    List<TermMention> chemicalList = new ArrayList<TermMention>();
-                    List<TermMention> keywordList = new ArrayList<TermMention>();
-                    List<String> insightList = new ArrayList<String>();
-                    List<TermMention> paper_mesh_termList = new ArrayList<TermMention>();
-                    List<String> termList = new ArrayList<String>();
-
-                    JSONArray diseases = resultJSON.optJSONArray("diseases");
-
-                    if (diseases != null) {
-                        for (int i = 0; i < diseases.length(); i++) {
-                            JSONObject disease = diseases.getJSONObject(i);
-                            String diseaseName = disease.getString("name");
-                            int mentions = disease.getInt("mentions");
-                            diseaseList.add(new TermMention(diseaseName, mentions));
-
+                    for (Iterator key = sections.keys(); key.hasNext();) {
+                        String name = key.next().toString();
+                        JSONObject section = sections.getJSONObject(name);
+                        String text = section.getString("text");
+                        if (name.equals("title")) {
+                            title = text;
+                        } else if (name.equals("objective")) {
+                            project_objective = text;
+                            sectionsList.add(name + "::" + text);
+                        } else {
+                            int len = Math.min(text.length() - 1, 10000);
+                            report_summary += text.substring(0, len); // Get only the first 10.000
+                            sectionsList.add(name + "::" + text.substring(0, len));
                         }
                     }
+                    List<Publication> publicationList = new ArrayList<Publication>();
 
-                    JSONArray chemicals = resultJSON.optJSONArray("paper_chemicals");
+                    for (String section : sectionsList) {
+                        String[] txts = section.split("::");
+                        String type = txts[0];
+                        String txt = txts[1];
 
-                    if (chemicals != null) {
-                        for (int i = 0; i < chemicals.length(); i++) {
-                            JSONObject chemical = chemicals.getJSONObject(i);
-                            String chemicalName = chemical.getString("chemical");
-                            int mentions = chemical.getInt("mentions");
-                            chemicalList.add(new TermMention(chemicalName, mentions));
-
-                        }
+                        publicationList.add(new Publication(
+                                "CORDIS" + project_id + type,
+                                "",
+                                "", //DOI
+                                year,
+                                title + " " + type,
+                                txt, //Abstract
+                                null,
+                                null));
                     }
 
-                    JSONArray paper_keywords = resultJSON.optJSONArray("paper_keywords");
+                    JSONObject publications = resultJSON.getJSONObject("publications").getJSONObject("pubmed_abstracts");
 
-                    if (paper_keywords != null) {
-                        for (int i = 0; i < paper_keywords.length(); i++) {
-                            JSONObject keyword = paper_keywords.getJSONObject(i);
-                            String keywordName = keyword.getString("keyword");
-                            int mentions = keyword.getInt("mentions");
-                            keywordList.add(new TermMention(keywordName, mentions));
+                    for (Iterator key = publications.keys(); key.hasNext();) {
+                        String pmid = key.next().toString();
+                        JSONObject publication = publications.getJSONObject(pmid);
 
+                        String pubTitle = publication.optString("ArticleTitle","");
+                        String abstractText = publication.optString("AbstractText","");
+                        String pubDate = publication.optString("ArticleDate", "1/1/2016");
+                        String pubYear = pubDate.split("/")[2];
+
+                        JSONArray otherIds = publication.optJSONArray("OtherIDs");
+                        String doi = "";
+                        String pmcid = "";
+                        if (otherIds != null) {
+                            for (int i = 0; i < otherIds.length(); i++) {
+                                JSONObject paper_mesh_term = otherIds.getJSONObject(i);
+                                String source = paper_mesh_term.getString("Source");
+                                if (source.equals("doi")) {
+                                    doi = paper_mesh_term.getString("id");
+
+                                }
+                                if (source.equals("pmc")) {
+                                    pmcid = paper_mesh_term.getString("id");
+
+                                }
+
+                            }
                         }
+
+                        List<String> keywords = new ArrayList<String>();
+                        JSONArray keywordList = publication.optJSONArray("Keywords");
+
+                        if (keywordList != null) {
+                            for (int i = 0; i < keywordList.length(); i++) {
+                                keywords.add(keywordList.getString(i));
+
+                            }
+                        }
+
+                        JSONArray paper_mesh_terms = publication.optJSONArray("MeshHeadings");
+
+                        List<String> meshTerms = new ArrayList<String>();
+                        if (paper_mesh_terms != null) {
+                            for (int i = 0; i < paper_mesh_terms.length(); i++) {
+                                JSONArray meshTermsArray = paper_mesh_terms.getJSONArray(i);
+                                for (int j = 0; j < meshTermsArray.length(); j++) {
+                                    JSONObject paper_mesh_term = meshTermsArray.getJSONObject(j);
+                                    String label = paper_mesh_term.getString("Label");
+                                    if (label.equals("DescriptorName")) {
+                                        String term = paper_mesh_term.getString("text");
+                                        meshTerms.add(term);
+
+                                    }
+                                }
+
+                            }
+                        }
+
+                        publicationList.add(new Publication(
+                                pmcid,
+                                pmid,
+                                doi, //DOI
+                                pubYear,
+                                pubTitle,
+                                abstractText, //Abstract
+                                meshTerms,
+                                keywords));
                     }
 
-                    JSONArray insights = resultJSON.optJSONArray("insights");
-
-                    if (insights != null) {
-                        for (int i = 0; i < insights.length(); i++) {
-                            JSONObject insight = insights.getJSONObject(i);
-                            String insightTxt = insight.getString("text");
-                            insightList.add(insightTxt);
-
-                        }
-                    }
-
+//                    List<TermMention> diseaseList = new ArrayList<TermMention>();
+//                    List<TermMention> chemicalList = new ArrayList<TermMention>();
+//                    List<TermMention> keywordList = new ArrayList<TermMention>();
+//                    List<String> insightList = new ArrayList<String>();
+//                    List<TermMention> paper_mesh_termList = new ArrayList<TermMention>();
+//                    List<String> termList = new ArrayList<String>();
+//
+//                    List<Publication> publicationList = new ArrayList<Publication>();
+//
+//                    JSONArray diseases = resultJSON.optJSONArray("diseases");
+//
+//                    if (diseases != null) {
+//                        for (int i = 0; i < diseases.length(); i++) {
+//                            JSONObject disease = diseases.getJSONObject(i);
+//                            String diseaseName = disease.getString("name");
+//                            int mentions = disease.getInt("mentions");
+//                            diseaseList.add(new TermMention(diseaseName, mentions));
+//
+//                        }
+//                    }
+//
+//                    JSONArray chemicals = resultJSON.optJSONArray("paper_chemicals");
+//
+//                    if (chemicals != null) {
+//                        for (int i = 0; i < chemicals.length(); i++) {
+//                            JSONObject chemical = chemicals.getJSONObject(i);
+//                            String chemicalName = chemical.getString("chemical");
+//                            int mentions = chemical.getInt("mentions");
+//                            chemicalList.add(new TermMention(chemicalName, mentions));
+//
+//                        }
+//                    }
+//
+//                    JSONArray paper_keywords = resultJSON.optJSONArray("paper_keywords");
+//
+//                    if (paper_keywords != null) {
+//                        for (int i = 0; i < paper_keywords.length(); i++) {
+//                            JSONObject keyword = paper_keywords.getJSONObject(i);
+//                            String keywordName = keyword.getString("keyword");
+//                            int mentions = keyword.getInt("mentions");
+//                            keywordList.add(new TermMention(keywordName, mentions));
+//
+//                        }
+//                    }
+//
+//                    JSONArray insights = resultJSON.optJSONArray("insights");
+//
+//                    if (insights != null) {
+//                        for (int i = 0; i < insights.length(); i++) {
+//                            JSONObject insight = insights.getJSONObject(i);
+//                            String insightTxt = insight.getString("text");
+//                            insightList.add(insightTxt);
+//
+//                        }
+//                    }
 //                    JSONArray terms = resultJSON.getJSONArray("terms");
 //
 //                    for (int i = 0; i < insights.length(); i++) {
@@ -263,18 +421,6 @@ public class CordisDataJSONParse {
 //                        termList.add(term);
 //
 //                    }
-                    JSONArray paper_mesh_terms = resultJSON.optJSONArray("paper_mesh_terms");
-
-                    if (paper_mesh_terms != null) {
-                        for (int i = 0; i < paper_mesh_terms.length(); i++) {
-                            JSONObject paper_mesh_term = paper_mesh_terms.getJSONObject(i);
-                            String term = paper_mesh_term.getString("mesh_term");
-                            int mentions = paper_mesh_term.getInt("mentions");
-                            paper_mesh_termList.add(new TermMention(term, mentions));
-
-                        }
-                    }
-
                     saveProject(SQLConnectionString, new Project(call,
                             funded_under,
                             project_id,
@@ -285,12 +431,7 @@ public class CordisDataJSONParse {
                             title,
                             project_objective,
                             cordis_link,
-                            diseaseList,
-                            keywordList,
-                            insightList,
-                            paper_mesh_termList,
-                            termList,
-                            chemicalList));
+                            publicationList));
                     //paper_mesh_terms
                     //subjects
                     //insights
@@ -337,7 +478,6 @@ public class CordisDataJSONParse {
 //                    fund_lvl0 = project.Funded_under.split("-")[0];
 //                    fund_lvl2 = project.Funded_under.split("-")[1];
 //                }
-
                 bulkInsert.setString(1, projectId);
                 bulkInsert.setString(2, project.Project_id);
                 bulkInsert.setString(3, project.Title);
@@ -355,39 +495,70 @@ public class CordisDataJSONParse {
                 int result = bulkInsert.executeUpdate();
 
                 if (result > 0) {
-                    PreparedStatement deletestatement = connection.prepareStatement("Delete from pubkeyword where pubid=?");
-                    deletestatement.setString(1, projectId);
-                    deletestatement.executeUpdate();
+                    if (project.PublicationList != null) {
+                        for (Publication pub : project.PublicationList) {
 
-                    deletestatement = connection.prepareStatement("Delete from pubmeshterm where pubid=?");
-                    deletestatement.setString(1, projectId);
-                    deletestatement.executeUpdate();
+                            PreparedStatement selectstatement = connection.prepareStatement("Select * from publication where pubid=? OR referenceId=?");
+                            selectstatement.setString(1, pub.pmcId);
+                            selectstatement.setString(2, pub.pmcId);
+                            ResultSet existedPubs = selectstatement.executeQuery();
 
-                    deletestatement = connection.prepareStatement("Delete from pubkeyterm where pubid=?");
-                    deletestatement.setString(1, projectId);
-                    deletestatement.executeUpdate();
+                            if (!existedPubs.next()) {
 
-                    bulkInsert = null;
-                    insertSql = "insert into pubkeyword (pubid, keyword) values (?,?)";
-                    bulkInsert = connection.prepareStatement(insertSql);
-                    for (TermMention keyword : project.KeywordList) {
-                        bulkInsert.setString(1, projectId);
-                        bulkInsert.setString(2, keyword.term);
-                        bulkInsert.executeUpdate();
+                                bulkInsert = null;
+                                insertSql = "INSERT INTO public.publication(\n"
+                                        + "            pubid, referenceid, repository, title, fulltext, abstract, journalissn, \n"
+                                        + "            doi, pubyear, keywords, batchid)    \n"
+                                        + "    VALUES (?, ?, ?, ?, ?, ?, ?, \n"
+                                        + "            ?, ?, ?, ?) \n";
 
-                    }
+                                bulkInsert = connection.prepareStatement(insertSql);
+                                bulkInsert.setString(1, pub.pmcId);
+                                bulkInsert.setString(2, pub.pmcId);
+                                bulkInsert.setString(3, "CORDIS");
+                                bulkInsert.setString(4, pub.Title);
+                                bulkInsert.setString(5, "");
+                                bulkInsert.setString(6, pub.Abstract);
+                                bulkInsert.setString(7, "");
+                                bulkInsert.setString(8, pub.DOI);
+                                bulkInsert.setString(9, pub.Year);
+                                bulkInsert.setString(10, "");
+                                bulkInsert.setString(11, pub.Year);
+                                bulkInsert.executeUpdate();
 
-                    bulkInsert = null;
-                    insertSql = "insert into pubmeshterm (pubid, descriptor, count) values (?,?, ?)";
-                    bulkInsert = connection.prepareStatement(insertSql);
-                    for (TermMention meshTerm : project.Paper_mesh_termList) {
-                        bulkInsert.setString(1, projectId);
-                        bulkInsert.setString(2, meshTerm.term);
-                        bulkInsert.setInt(3, meshTerm.mentions);
-                        bulkInsert.executeUpdate();
+                                bulkInsert = null;
+                                insertSql = "insert into pubproject (pubid, projectid) values (?,?)";
+                                bulkInsert = connection.prepareStatement(insertSql);
+                                bulkInsert.setString(1, pub.pmcId);
+                                bulkInsert.setString(2, projectId);
+                                bulkInsert.executeUpdate();
 
-                    }
+                                bulkInsert = null;
+                                insertSql = "insert into pubkeyword (pubid, keyword) values (?,?)";
+                                bulkInsert = connection.prepareStatement(insertSql);
+                                if (pub.KeywordList != null) {
+                                    for (String keyword : pub.KeywordList) {
+                                        bulkInsert.setString(1, pub.pmcId);
+                                        bulkInsert.setString(2, keyword);
+                                        bulkInsert.executeUpdate();
 
+                                    }
+                                }
+
+                                bulkInsert = null;
+                                insertSql = "insert into pubmeshterm (pubid, descriptor, count) values (?,?, ?)";
+                                bulkInsert = connection.prepareStatement(insertSql);
+                                if (pub.MeSHTerms != null) {
+                                    for (String meshTerm : pub.MeSHTerms) {
+                                        bulkInsert.setString(1, pub.pmcId);
+                                        bulkInsert.setString(2, meshTerm);
+                                        bulkInsert.setInt(3, 1);
+                                        bulkInsert.executeUpdate();
+
+                                    }
+                                }
+                            }
+                            /*
                     bulkInsert = null;
                     insertSql = "insert into pubkeyterm (pubid, term, type, count) values (?,?,?, ?)";
                     bulkInsert = connection.prepareStatement(insertSql);
@@ -411,7 +582,11 @@ public class CordisDataJSONParse {
                         bulkInsert.executeUpdate();
 
                     }
+                     }
+                             */
 
+                        }
+                    }
                 }
                 connection.commit();
 

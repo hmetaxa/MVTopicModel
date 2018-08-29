@@ -340,7 +340,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
     public void run() {
 
-        final int logBatchSize = 1000;
+        final int logBatchSize = 10;
         
         if (pubsQueue != null) {
             
@@ -677,7 +677,8 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         String txt2Annotate = "";
         int txt2AnnotatNum = 0;
         final long startDocTime = System.currentTimeMillis();
-        String[] txts = text.split("\n");
+        //String[] txts = text.split("\n");
+        String[] txts = text.split("\\.");
         for (String snippet : txts) {
             String s = "";
             try {

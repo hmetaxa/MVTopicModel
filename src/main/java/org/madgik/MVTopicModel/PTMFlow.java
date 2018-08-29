@@ -60,24 +60,24 @@ public class PTMFlow {
     int docTopicsMax = -1;
     int numOfThreads = 4;
     int numTopics = 400;
-    int numIterations = 700; //Max 2000
+    int numIterations = 800; //Max 2000
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
     ExperimentType experimentType = ExperimentType.HEALTHTender;
     int pruneCnt = 300;
     int pruneLblCnt = 25;
-    double pruneMaxPerc = 1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
+    double pruneMaxPerc = 0.1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
     double pruneMinPerc = 0.05;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
     boolean ACMAuthorSimilarity = true;
-    boolean calcTopicDistributionsAndTrends = true;
+    boolean calcTopicDistributionsAndTrends = false;
     boolean calcEntitySimilarities = true;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = true;
+    boolean runTopicModelling = false;
     boolean runWordEmbeddings = false;
-    boolean useTypeVectors = true;
-    boolean trainTypeVectors = true;
+    boolean useTypeVectors = false;
+    boolean trainTypeVectors = false;
     boolean findKeyPhrases = false;
     double useTypeVectorsProb = 0.6;
     Net2BoWType PPRenabled = Net2BoWType.OneWay;
@@ -255,7 +255,7 @@ public class PTMFlow {
 
         if (calcEntitySimilarities) {
 
-            calcSimilaritiesAndTrends(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
+            calcSimilarities(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
 
         }
 
@@ -628,7 +628,7 @@ public class PTMFlow {
         // FeatureVector.toSimpFilefff
     }
 
-    private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount, double docProportionMinCutoff, double docProportionMaxCutoff, boolean preserveCase)
+    private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount, double docProportionMaxCutoff, double docProportionMinCutoff, boolean preserveCase)
             throws IOException {
 
         //SimpleTokenizer st = new SimpleTokenizer(new File("stoplists/en.txt"));
@@ -681,7 +681,7 @@ public class PTMFlow {
         while (wordIter.hasNext()) {
             String word = (String) wordIter.next();
 
-            if (!word.matches("^(?!.*(-[^-]*-|_[^_]*_))[A-Za-z0-9][\\w-]*[A-Za-z0-9]$") || word.contains("cid") || word.contains("italic") || word.contains("null") || word.contains("usepackage") || word.contains("fig")) {
+            if (!word.matches("^(?!.*(-[^-]*-|_[^_]*_))[A-Za-z0-9][\\w-]*[A-Za-z0-9]$") || word.length() < 3 || word.contains("cid") || word.contains("italic") || word.contains("null") || word.contains("usepackage") || word.contains("fig")) {
                 prunedTokenizer.stop(word);
             }
         }
@@ -812,7 +812,7 @@ public class PTMFlow {
 
             logger.info("Calc topic Entity Topic Distributions and Trends started");
 
-            String deleteSQL = String.format("Delete from EntityTopicDistribution here ExperimentId= '%s'", experimentId);
+            String deleteSQL = String.format("Delete from EntityTopicDistribution where ExperimentId= '%s'", experimentId);
             statement.executeUpdate(deleteSQL);
 
             logger.info("Insert Full Topic Distribution ");
@@ -872,54 +872,52 @@ public class PTMFlow {
 
             logger.info("Funder Topic distribution");
             SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "SELECT '', PubTopic.TopicId, Project.funder,'Funder',\n"
-                    + "           round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                    + "             PubTopic.ExperimentId\n"
-                    + "      FROM PubTopic\n"
-                    + "      INNER JOIN  PubProject ON PubTopic.PubId = PubProject.PubId AND PubTopic.weight > 0.1\n"
-                    + "      and  PubTopic.ExperimentId='" + experimentId + "' \n"
-                    + "      INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
-                    + "           INNER JOIN (SELECT Project.funder, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                    + "           FROM PubTopic\n"
-                    + "           INNER JOIN   PubProject ON PubTopic.PubId = PubProject.PubId AND  PubTopic.weight > 0.1\n"
-                    + "           INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
-                    + "           GROUP BY  ExperimentId,Project.funder)\n"
-                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = Project.funder AND \n"
-                    + "                                           SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId                                            \n"
-                    + "     GROUP BY Project.funder,\n"
-                    + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                    + "              PubTopic.TopicId,\n"
-                    + "              PubTopic.ExperimentId\n"
-                    + "              order by  PubTopic.ExperimentId, Project.funder, NormWeight Desc,PubTopic.ExperimentId";
+                    + " SELECT '', PubTopic.TopicId, PubFunder.funder,'Funder',\n"
+                    + "                               round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "                                 PubTopic.ExperimentId\n"
+                    + "                          FROM PubTopic\n"
+                    + "                          INNER JOIN  PubFunder ON PubTopic.PubId = PubFunder.PubId AND PubTopic.weight > 0.1\n"
+                    + "                          and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "                        \n"
+                    + "                               INNER JOIN (SELECT PubFunder.funder, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "                               FROM PubTopic\n"
+                    + "                               INNER JOIN   PubFunder ON PubTopic.PubId = PubFunder.PubId AND  PubTopic.weight > 0.1\n"
+                    + "                               \n"
+                    + "                               GROUP BY  ExperimentId,PubFunder.funder)\n"
+                    + "                               SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = PubFunder.funder AND \n"
+                    + "                                                               SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId                                            \n"
+                    + "                         GROUP BY PubFunder.funder,\n"
+                    + "                                  SumTopicWeightPerProjectView.ProjectSumWeight,\n"
+                    + "                                  PubTopic.TopicId,\n"
+                    + "                                  PubTopic.ExperimentId\n"
+                    + "                                  order by  PubTopic.ExperimentId, PubFunder.funder, NormWeight Desc,PubTopic.ExperimentId";
 
             statement.executeUpdate(SQLstr);
 
             logger.info("Funder Trend Topic distribution");
 
             SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "SELECT Publication.batchId, PubTopic.TopicId, Project.funder,'FunderTrend',\n"
-                    + "           round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                    + "             PubTopic.ExperimentId\n"
-                    + "      FROM PubTopic\n"
-                    + "      INNER JOIN Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1\n"
-                    + "      and  PubTopic.ExperimentId='" + experimentId + "' \n"
-                    + "      INNER JOIN  PubProject ON PubTopic.PubId = PubProject.PubId \n"
-                    + "      INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
-                    + "           INNER JOIN (SELECT Project.funder, Publication.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                    + "           FROM PubTopic\n"
-                    + "           Inner Join Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1           \n"
-                    + "           INNER JOIN   PubProject ON PubTopic.PubId = PubProject.PubId \n"
-                    + "           INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
-                    + "           GROUP BY  Project.funder,Publication.batchId,ExperimentId)\n"
-                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = Project.funder AND \n"
-                    + "                                           SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId  AND                                          \n"
-                    + "                                           SumTopicWeightPerProjectView.batchId = Publication.batchId\n"
-                    + "     GROUP BY Project.funder,\n"
-                    + "         Publication.batchId,\n"
-                    + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                    + "              PubTopic.TopicId,\n"
-                    + "              PubTopic.ExperimentId\n"
-                    + "              order by  PubTopic.ExperimentId, Project.funder, NormWeight Desc,PubTopic.ExperimentId";
+                    + " SELECT Publication.batchId, PubTopic.TopicId, PubFunder.funder,'FunderTrend',\n"
+                    + "                               round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "                                 PubTopic.ExperimentId\n"
+                    + "                          FROM PubTopic\n"
+                    + "                          INNER JOIN Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1\n"
+                    + "                          and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "                          INNER JOIN  PubFunder ON PubTopic.PubId = PubFunder.PubId                           \n"
+                    + "                               INNER JOIN (SELECT PubFunder.funder, Publication.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "                               FROM PubTopic\n"
+                    + "                               Inner Join Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1           \n"
+                    + "                               INNER JOIN   PubFunder ON PubTopic.PubId = PubFunder.PubId                                \n"
+                    + "                               GROUP BY  PubFunder.funder,Publication.batchId,ExperimentId)\n"
+                    + "                               SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = PubFunder.funder AND \n"
+                    + "                                                               SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId  AND                                          \n"
+                    + "                                                               SumTopicWeightPerProjectView.batchId = Publication.batchId\n"
+                    + "                         GROUP BY PubFunder.funder,\n"
+                    + "                             Publication.batchId,\n"
+                    + "                                  SumTopicWeightPerProjectView.ProjectSumWeight,\n"
+                    + "                                  PubTopic.TopicId,\n"
+                    + "                                  PubTopic.ExperimentId\n"
+                    + "                                  order by  PubTopic.ExperimentId, PubFunder.funder, NormWeight Desc,PubTopic.ExperimentId";
 
             statement.executeUpdate(SQLstr);
 
@@ -1308,7 +1306,7 @@ public class PTMFlow {
         logger.info("Pub citation similarities calculation finished");
     }
 
-    public void calcSimilaritiesAndTrends(String SQLLitedb, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
+    public void calcSimilarities(String SQLLitedb, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
         //calc similarities
 
         logger.info("similarities calculation Started");
@@ -1319,7 +1317,7 @@ public class PTMFlow {
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
 
-            logger.info("similarities calculation Started");
+            
 
             String sql = "";
             String entityType = "";
@@ -1592,11 +1590,11 @@ public class PTMFlow {
             Alphabet alphabetM = new Alphabet();
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
             pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
-//            if (experimentType == ExperimentType.ACM || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLP_ACM) {
-//                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
-//            } else {
-//                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ";"));
-//            }
+            
+            if (m == 1 && experimentType == ExperimentType.HEALTHTender) //keywords
+            {
+                pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
+            }
             instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
         }
 
@@ -1617,8 +1615,11 @@ public class PTMFlow {
 
             if (experimentType == ExperimentType.HEALTHTender) {
                 txtsql = "select distinct on (pubviewtxt.pubId) pubviewtxt.pubId, text, fulltext from pubviewtxt"
-                        + " INNER JOIN pubproject on pubproject.pubId = pubviewtxt.pubId\n"
-                        + " INNER JOIN project on pubproject.projectid = project.projectid  AND ((funder IN ('WT', 'NIH') ) OR (fundinglevel2='FP7-HEALTH')) ";
+                        + " LEFT JOIN pubproject on pubproject.pubId = pubviewtxt.pubId\n"
+                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                        + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewtxt.pubId \n"
+                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova', 'WT', 'NIH')) OR (pubviewtxt.referenceid like 'PMC%') ";
+                        //+ " LIMIT 1000";
 
             }
 
@@ -1638,9 +1639,12 @@ public class PTMFlow {
                 sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo";
 
             } else if (experimentType == ExperimentType.HEALTHTender) {
-                sql = " select distinct on (pubviewsideinfo.pubId)   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo"
-                        + " INNER JOIN pubproject on pubproject.pubId = pubviewsideinfo.pubId\n"
-                        + " INNER JOIN project on pubproject.projectid = project.projectid  AND ((funder IN ('WT', 'NIH') ) OR (fundinglevel2='FP7-HEALTH')) ";
+                sql = " select distinct on (pubviewsideinfo.pubId)   pubviewsideinfo.pubId,  citations,  keywords, meshterms from pubviewsideinfo"
+                        + " LEFT JOIN pubproject on pubproject.pubId = pubviewsideinfo.pubId\n"
+                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                        + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewsideinfo.pubId \n"
+                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewsideinfo.referenceid like 'PMC%')";
+                        //+ " LIMIT 1000";
 
             }
 
@@ -1776,7 +1780,14 @@ public class PTMFlow {
                                 }
                             }
 
-                            if (numModalities > 3) {
+                            if (numModalities > 2) {
+                                String tmpMeshTermsStr = rs.getString("meshterms");//.replace("\t", ",");
+                                if (tmpMeshTermsStr != null && !tmpMeshTermsStr.equals("")) {
+                                    instanceBuffer.get(2).add(new Instance(tmpMeshTermsStr.replace('-', ' ').toLowerCase(), null, rs.getString("pubId"), "MeshTerms"));
+                                }
+                            }
+
+                            if (numModalities > 4) {
                                 String tmpStr = rs.getString("Citations");//.replace("\t", ",");
                                 String citationStr = "";
                                 if (tmpStr != null && !tmpStr.equals("")) {
@@ -1793,7 +1804,7 @@ public class PTMFlow {
                                         }
                                     }
                                     citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(3).add(new Instance(citationStr, null, rs.getString("pubId"), "citation"));
+                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("pubId"), "citation"));
                                 }
                             }
 
@@ -1805,7 +1816,7 @@ public class PTMFlow {
                 }
             }
 
-            if (numModalities > 2 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender)) {
+            if (numModalities > 3 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender)) {
                 logger.info(" Getting DBpedia annotations from the database");
                 // get txt data 
                 Statement dbPediastatement = connection.createStatement();
@@ -1813,8 +1824,11 @@ public class PTMFlow {
                 String SQLquery = "select   pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia";
                 if (experimentType == ExperimentType.HEALTHTender) {
                     SQLquery = "select distinct on (pubviewdbpedia.pubId)    pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia"
-                            + " INNER JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
-                            + " INNER JOIN project on pubproject.projectid = project.projectid  AND ((funder IN ('WT', 'NIH') ) OR (fundinglevel2='FP7-HEALTH')) ";
+                            + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
+                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                            + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewdbpedia.pubId \n"
+                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewdbpedia.referenceid like 'PMC%')";
+                   // + " LIMIT 1000";
 
                 }
                 ResultSet rs = txtstatement.executeQuery(SQLquery);
@@ -1836,12 +1850,12 @@ public class PTMFlow {
                             }
                         }
                         DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                        instanceBuffer.get(2).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
+                        instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
                     }
                 }
             }
 
-            if (numModalities > 4 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender)) {
+            if (numModalities > 5 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender)) {
                 logger.info(" Getting funding info from the database");
                 // get txt data 
                 Statement dbfundingstatement = connection.createStatement();
@@ -1849,9 +1863,11 @@ public class PTMFlow {
                 String SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding ";
                 if (experimentType == ExperimentType.HEALTHTender) {
                     SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding "
-                            + " INNER JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
-                            + "INNER JOIN project on pubproject.projectid = project.projectid\n"
-                            + "WHERE (funder IN ('WT', 'NIH') ) OR (fundinglevel2='FP7-HEALTH')";
+                            + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
+                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                            + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewfunding.pubId \n"
+                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewfunding.referenceid like 'PMC%')";
+                   // + " LIMIT 1000";
                 }
                 ResultSet rs = txtstatement.executeQuery(SQLquery);
 
@@ -1860,7 +1876,7 @@ public class PTMFlow {
                     String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
                     if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
 
-                        instanceBuffer.get(4).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
+                        instanceBuffer.get(5).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
                     }
 
                 }
@@ -1901,6 +1917,7 @@ public class PTMFlow {
         }
 
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
+
             logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
             //instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
             instances[m].addThruPipe(instanceBuffer.get(m).iterator());
@@ -1944,7 +1961,7 @@ public class PTMFlow {
                         instance = instances[m].get(0);
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 2 && experimentType == ExperimentType.HEALTHTender)) ? pruneLblCnt * 3 : pruneLblCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.HEALTHTender)) ? pruneLblCnt * 3 : pruneLblCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),

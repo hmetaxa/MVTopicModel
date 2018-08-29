@@ -1867,7 +1867,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                     while (iterator.hasNext() && word < numWords) {
                         IDSorter info = iterator.next();
-                        out.append(alphabet[m].lookupObject(info.getID()) + " ");
+                        out.append(alphabet[m].lookupObject(info.getID()) + "; ");
                         word++;
                     }
 
