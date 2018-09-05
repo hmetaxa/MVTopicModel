@@ -32,6 +32,7 @@ public class PTMFlow {
         OpenAIRE,
         OAFETGrants,
         HEALTHTender,
+        HEALTHTenderPM,
         LFR,
         DBLP,
         DBLPNetOnly
@@ -64,7 +65,7 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.HEALTHTender;
+    ExperimentType experimentType = ExperimentType.HEALTHTenderPM;
     int pruneCnt = 300;
     int pruneLblCnt = 25;
     double pruneMaxPerc = 0.1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
@@ -74,7 +75,7 @@ public class PTMFlow {
     boolean calcEntitySimilarities = true;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = false;
+    boolean runTopicModelling = true;
     boolean runWordEmbeddings = false;
     boolean useTypeVectors = false;
     boolean trainTypeVectors = false;
@@ -1317,8 +1318,6 @@ public class PTMFlow {
             connection = DriverManager.getConnection(SQLLitedb);
             Statement statement = connection.createStatement();
 
-            
-
             String sql = "";
             String entityType = "";
             switch (experimentType) {
@@ -1341,6 +1340,7 @@ public class PTMFlow {
 //                    break;
                 case OpenAIRE:
                 case HEALTHTender:
+                case HEALTHTenderPM:
                     entityType = "Project";
                     sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
                             + "                                                        from EntityTopicDistribution                                                        \n"
@@ -1431,6 +1431,7 @@ public class PTMFlow {
                     case OpenAIRE:
                     case OAFETGrants:
                     case HEALTHTender:
+                    case HEALTHTenderPM:
                         newLabelId = rs.getString("projectId");
                         break;
 
@@ -1590,8 +1591,8 @@ public class PTMFlow {
             Alphabet alphabetM = new Alphabet();
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
             pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
-            
-            if (m == 1 && experimentType == ExperimentType.HEALTHTender) //keywords
+
+            if (m == 1 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM) //keywords
             {
                 pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
@@ -1618,9 +1619,17 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pubviewtxt.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewtxt.pubId \n"
-                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova', 'WT', 'NIH')) OR (pubviewtxt.referenceid like 'PMC%') ";
-                        //+ " LIMIT 1000";
+                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova', 'WT', 'NIH')) OR (pubviewtxt.referenceid like 'PMC%') "
+                        ;//+ " LIMIT 10000";
+            }
 
+            if (experimentType == ExperimentType.HEALTHTenderPM) {
+                txtsql = "select distinct on (pmpubviewtxt.pubId) pmpubviewtxt.pubId, text from pmpubviewtxt"
+                        + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewtxt.pubId\n"
+                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                        + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewtxt.pubId \n"
+                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova', 'WT', 'NIH')) OR (pmpubviewtxt.referenceid like 'PMC%') ";
+                        //+ " LIMIT 1000";
             }
 
             if (experimentType == ExperimentType.ACM) {
@@ -1643,8 +1652,16 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pubviewsideinfo.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewsideinfo.pubId \n"
-                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewsideinfo.referenceid like 'PMC%')";
-                        //+ " LIMIT 1000";
+                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewsideinfo.referenceid like 'PMC%')"
+                        ;//+ " LIMIT 10000";
+
+            } else if (experimentType == ExperimentType.HEALTHTenderPM) {
+                sql = " select distinct on (pmpubviewsideinfo.pubId)   pmpubviewsideinfo.pubId,  citations,  keywords, meshterms from pmpubviewsideinfo"
+                        + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewsideinfo.pubId\n"
+                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                        + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewsideinfo.pubId \n"
+                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pmpubviewsideinfo.referenceid like 'PMC%')";
+                //+ " LIMIT 1000";
 
             }
 
@@ -1663,6 +1680,7 @@ public class PTMFlow {
                     case ACM:
                     case OpenAIRE:
                     case HEALTHTender:
+                    case HEALTHTenderPM:
                         txt = rstxt.getString("text");
                         instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("pubId"), "text"));
 
@@ -1773,6 +1791,7 @@ public class PTMFlow {
                             break;
                         case OpenAIRE:
                         case HEALTHTender:
+                        case HEALTHTenderPM:
                             if (numModalities > 1) {
                                 String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
                                 if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
@@ -1816,7 +1835,7 @@ public class PTMFlow {
                 }
             }
 
-            if (numModalities > 3 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender)) {
+            if (numModalities > 3 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) {
                 logger.info(" Getting DBpedia annotations from the database");
                 // get txt data 
                 Statement dbPediastatement = connection.createStatement();
@@ -1827,8 +1846,17 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewdbpedia.pubId \n"
-                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewdbpedia.referenceid like 'PMC%')";
-                   // + " LIMIT 1000";
+                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewdbpedia.referenceid like 'PMC%')"
+                            ;//+ " LIMIT 10000";
+
+                }
+                if (experimentType == ExperimentType.HEALTHTenderPM) {
+                    SQLquery = "select distinct on (pmpubviewdbpedia.pubId)    pmpubviewdbpedia.pubId,  DBPediaResources from pmpubviewdbpedia"
+                            + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewdbpedia.pubId\n"
+                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
+                            + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewdbpedia.pubId \n"
+                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pmpubviewdbpedia.referenceid like 'PMC%')";
+                    // + " LIMIT 1000";
 
                 }
                 ResultSet rs = txtstatement.executeQuery(SQLquery);
@@ -1855,7 +1883,7 @@ public class PTMFlow {
                 }
             }
 
-            if (numModalities > 5 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender)) {
+            if (numModalities > 5 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) {
                 logger.info(" Getting funding info from the database");
                 // get txt data 
                 Statement dbfundingstatement = connection.createStatement();
@@ -1866,8 +1894,8 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewfunding.pubId \n"
-                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewfunding.referenceid like 'PMC%')";
-                   // + " LIMIT 1000";
+                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewfunding.referenceid like 'PMC%')"
+                            ;//+ " LIMIT 10000";
                 }
                 ResultSet rs = txtstatement.executeQuery(SQLquery);
 
@@ -1903,6 +1931,7 @@ public class PTMFlow {
 
         if (!ignoreText) {
             try {
+                pruneCnt = instanceBuffer.get(0).size() / 2000;
                 GenerateStoplist(tokenizer, instanceBuffer.get(0), pruneCnt, pruneMaxPerc, pruneMinPerc, false);
                 instances[0].addThruPipe(instanceBuffer.get(0).iterator());
                 //Alphabet tmpAlp = instances[0].getDataAlphabet();
@@ -1961,7 +1990,8 @@ public class PTMFlow {
                         instance = instances[m].get(0);
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.HEALTHTender)) ? pruneLblCnt * 3 : pruneLblCnt);
+                        int prCnt = instanceBuffer.get(m).size() / 2000;
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) ? prCnt * 2 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),

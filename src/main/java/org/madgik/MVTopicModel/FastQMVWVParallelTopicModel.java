@@ -38,7 +38,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Queue;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import org.knowceans.util.RandomSamplers;
 import org.knowceans.util.Samplers;
 import org.knowceans.util.Vectors;
@@ -482,13 +486,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             }
         }
     }
-    
-      private void CalcTopicTypeVectorSimilarities2(int maxNumWords) {
 
-          //TODO: WordVector = SUM(WeightInTopic * TopicVector) + WordVector
-          // TopicVector = TopicVector + SUM(WeightOfMostSignificantWordsInTopic * WordVector) 
-          // Update this either on line or once per cycle 
-          
+    private void CalcTopicTypeVectorSimilarities2(int maxNumWords) {
+
+        //TODO: WordVector = SUM(WeightInTopic * TopicVector) + WordVector
+        // TopicVector = TopicVector + SUM(WeightOfMostSignificantWordsInTopic * WordVector) 
+        // Update this either on line or once per cycle 
         double[] totalTopicVector = new double[2 * vectorSize];
         double[] totalTypeVector = new double[2 * vectorSize]; //
 
@@ -2687,8 +2690,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             FeatureSequence tokenSequence;
             int[] docLength = new int[numModalities];
 
+            TreeMap<Integer, Byte> sortedViews
+                    = new TreeMap<Integer, Byte>();
+
             for (byte m = 0; m < numModalities; m++) {
 
+                docLength[m] = 0;
                 if (doc.Assignments[m] != null) {
                     //TODO can I order by tokens/topics??
                     oneDocTopics = doc.Assignments[m].topicSequence.getFeatures();
@@ -2707,9 +2714,20 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                     }
                 }
+                sortedViews.put(new Integer(docLength[m]), new Byte(m));
             }
 
-            for (byte m = 1; m < numModalities; m++) {
+            Iterator iter = sortedViews.descendingMap().entrySet().iterator();
+            ArrayList<Byte> previousViews = new ArrayList<Byte>();
+
+            previousViews.add((Byte) ((Map.Entry) iter.next()).getValue());
+
+            // Traversing map. Note that the traversal
+            // produced sorted (by keys) output .
+            while (iter.hasNext()) {
+                Map.Entry val = (Map.Entry) iter.next();
+
+                byte m = (Byte) val.getValue();
 
                 if (doc.Assignments[m] != null) {
 
@@ -2723,7 +2741,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                             continue;
                         }
 //TODO: we should sort modalities according to length[m]
-                        for (byte i = (byte) (m - 1); i >= 0; i--) {
+
+                        for (byte i : previousViews) {
+
                             pDistr_Mean[m][i][docCnt] += (localTopicCounts[i][oneDocTopics[position]] > 0 ? 1.0 : 0d) / (double) docLength[m];
                             pDistr_Mean[i][m][docCnt] = pDistr_Mean[m][i][docCnt];
                             //pDistr_Var[m][i][docCnt]+= localTopicCounts[i][newTopic]/docLength[m];
@@ -2731,7 +2751,10 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                     }
                 }
+                previousViews.add(m);
+
             }
+            
 
         }
 
@@ -2745,7 +2768,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     sum += pDistr_Mean[m][i][j];
                 }
 
-                pMean[m][i] = sum / totalDocsPerModality[m];
+                pMean[m][i] = sum / (Math.min(totalDocsPerModality[m], totalDocsPerModality[i]));
                 pMean[i][m] = pMean[m][i];
 
                 //double var = 2 * (1 - mean);
