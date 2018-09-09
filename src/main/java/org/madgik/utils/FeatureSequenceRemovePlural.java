@@ -24,22 +24,6 @@ public class FeatureSequenceRemovePlural extends Pipe {
         String singular;
         int ret = -1;
 
-        if (term.length() > 1) {
-            singular = term.substring(0, term.length() - 1);
-            ret = currentAlphabet.lookupIndex(singular);
-            if (term.endsWith("s") && ret != -1) {
-                return ret;
-            }
-        }
-
-        if (term.length() > 2) {
-            singular = term.substring(0, term.length() - 2);
-            ret = currentAlphabet.lookupIndex(singular);
-            if (term.endsWith("es") && ret != -1) {
-                return ret;
-            }
-        }
-
         if (term.length() > 3) {
             singular = term.substring(0, term.length() - 3) + "y";
             ret = currentAlphabet.lookupIndex(singular);
@@ -50,6 +34,26 @@ public class FeatureSequenceRemovePlural extends Pipe {
             }
 
         }
+        
+        if (term.length() > 2) {
+            singular = term.substring(0, term.length() - 2);
+            ret = currentAlphabet.lookupIndex(singular);
+            if (term.endsWith("es") && ret != -1) {
+                return ret;
+            }
+        }
+        
+        if (term.length() > 1) {
+            singular = term.substring(0, term.length() - 1);
+            ret = currentAlphabet.lookupIndex(singular);
+            if (term.endsWith("s") && ret != -1) {
+                return ret;
+            }
+        }
+
+        
+
+        
 
         return -1;
     }

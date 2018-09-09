@@ -85,6 +85,7 @@ public class PTMFlow {
     int vectorSize = 200;
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String experimentId = "";
+    String previousModelFile = "";
 
     public PTMFlow() throws IOException {
         this(null);
@@ -173,7 +174,8 @@ public class PTMFlow {
             model.burninPeriod = burnIn;
             model.setNumThreads(numOfThreads);
 
-            model.addInstances(instances, batchId, vectorSize);//trainingInstances);//instances);
+            
+            model.addInstances(instances, batchId, vectorSize, "");//trainingInstances);//instances);
             logger.info(" instances added");
 
             //model.readWordVectorsDB(SQLConnectionString, vectorSize);
