@@ -315,34 +315,7 @@ public abstract class SpamClassifier {
                     }
                 }
 
-                /*
-                if (ilists[0].size() > 0) {
-                    trainAccuracy[c][trialIndex] = trainTrial.getAccuracy();
-                }
-                if (ilists[1].size() > 0) {
-                    testAccuracy[c][trialIndex] = testTrial.getAccuracy();
-                }
-                if (ilists[2].size() > 0 && v > 0) {
-                    validationAccuracy[c][trialIndex] = validationTrial.getAccuracy();
-                }
-
-
-                if (ilists[0].size() > 0) {
-                for (int k =0 ; k < labels.length; k++) 
-                    		trainPrecision[c][k][trialIndex] = trainTrial.getPrecision(labels[k]);
-                }
-                
-                if (ilists[1].size() > 0) {
-                for (int k =0 ; k < labels.length; k++) 
-							testPrecision[c][k][trialIndex] = testTrial.getPrecision(labels[k]);
-                }
-                
-                if (ilists[2].size() > 0 && v > 0) {
-                for (int k =0 ; k < labels.length; k++) 
-							validationPrecision[c][k][trialIndex] = validationTrial.getPrecision(labels[k]);
-                }
-                
-                 */
+             
                 if (outputFile.wasInvoked()) {
                     String filename = outputFile.value;
                     if (numTrainers > 1) {
