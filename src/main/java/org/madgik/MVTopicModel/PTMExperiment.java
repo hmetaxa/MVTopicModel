@@ -1,6 +1,5 @@
 package org.madgik.MVTopicModel;
 
-
 import org.madgik.utils.CsvBuilder;
 import org.madgik.utils.HtmlBuilder;
 import cc.mallet.util.*;
@@ -56,14 +55,12 @@ public class PTMExperiment {
     }
 
     public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
-    
+
     public PTMExperiment() throws IOException {
-        
-        
+
         int topWords = 20;
         int showTopicsInterval = 50;
         //int topLabels = 10;p
-        
 
         //int numIndependentTopics = 0;
         double docTopicsThreshold = 0.03;
@@ -292,7 +289,7 @@ public class PTMExperiment {
                 model.burninPeriod = burnIn;
                 model.setNumThreads(numOfThreads);
 
-                model.addInstances(instances, batchId, vectorSize);//trainingInstances);//instances);
+                model.addInstances(instances, batchId, vectorSize, "");//trainingInstances);//instances);
                 logger.info(" instances added");
 
                 //model.readWordVectorsDB(SQLLitedb, vectorSize);
@@ -392,7 +389,7 @@ public class PTMExperiment {
         }
         if (calcEntitySimilarities) {
 
-            calcSimilaritiesAndTrends(SQLLitedb, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
+            calcSimilarities(SQLLitedb, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
 
         }
 
@@ -530,7 +527,7 @@ public class PTMExperiment {
                 int newTopicId = rs.getInt("TopicId");
 
                 if (newTopicId != topicId && topicId != -1) {
-                    
+
                     logger.info("Finding key phrases for topic " + topicId);
                     topiaDoc = termExtractor.extractTerms(stringBuffer.toString());
                     topicTitles.put(topicId, topiaDoc.getFinalFilteredTerms());
@@ -936,6 +933,147 @@ public class PTMExperiment {
 
     }
 
+    public void CalcEntityTopicDistributionsAndTrends(String SQLLitedb, String experimentId) {
+        Connection connection = null;
+        try {
+
+            connection = DriverManager.getConnection(SQLLitedb);
+            Statement statement = connection.createStatement();
+
+            logger.info("Calc topic Entity Topic Distributions and Trends started");
+
+            String deleteSQL = String.format("Delete from EntityTopicDistribution here ExperimentId= '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+
+            logger.info("Insert Full Topic Distribution ");
+
+            String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                    + "select '',  PubTopic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, PubTopic.ExperimentId\n"
+                    + "from PubTopic\n"
+                    + "INNER JOIN (SELECT  sum(weight) AS SumWeight, ExperimentId\n"
+                    + "FROM PubTopic\n"
+                    + "Where PubTopic.weight>0.1 \n"
+                    + " and PubTopic.ExperimentId='" + experimentId + "'  \n"
+                    + "GROUP BY  ExperimentId) SumTopicWeightView on SumTopicWeightView.ExperimentId= PubTopic.ExperimentId\n"
+                    + "group By PubTopic.TopicId, PubTopic.ExperimentId, SumTopicWeightView.SumWeight\n"
+                    + "Order by  NormWeight Desc";
+
+            statement.executeUpdate(SQLstr);
+
+            logger.info("Trend Topic distribution for the whole coprus");
+
+            SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                    + "select Publication.BatchId,  PubTopic.TopicId, '', 'CorpusTrend', \n"
+                    + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  PubTopic.ExperimentId\n"
+                    + "from PubTopic\n"
+                    + "Inner Join Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1\n"
+                    + "INNER JOIN (SELECT Publication.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
+                    + "FROM PubTopic\n"
+                    + "INNER JOIN Publication ON PubTopic.PubId= Publication.PubId AND\n"
+                    + "PubTopic.weight>0.1\n "
+                    + "and PubTopic.ExperimentId='" + experimentId + "'   \n"
+                    + "GROUP BY Publication.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Publication.BatchId and SumTopicWeightPerBatchView.ExperimentId= PubTopic.ExperimentId\n"
+                    + "group By Publication.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, PubTopic.TopicId, PubTopic.ExperimentId\n"
+                    + "Order by Publication.BatchId,   NormWeight Desc";
+
+            statement.executeUpdate(SQLstr);
+            logger.info("Project Topic distribution");
+
+            SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                    + "SELECT '', PubTopic.TopicId, PubProject.ProjectId,'Project',\n"
+                    + "           round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "             PubTopic.ExperimentId\n"
+                    + "      FROM PubTopic\n"
+                    + "      INNER JOIN  PubProject ON PubTopic.PubId = PubProject.PubId AND PubTopic.weight > 0.1\n"
+                    + "      and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "           INNER JOIN (SELECT PubProject.ProjectId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "           FROM PubTopic\n"
+                    + "           INNER JOIN   PubProject ON PubTopic.PubId = PubProject.PubId AND  PubTopic.weight > 0.1\n"
+                    + "           GROUP BY  ExperimentId,PubProject.ProjectId)\n"
+                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.ProjectId = PubProject.ProjectId AND \n"
+                    + "                                           SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId                                            \n"
+                    + "     GROUP BY PubProject.ProjectId,\n"
+                    + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
+                    + "              PubTopic.TopicId,\n"
+                    + "              PubTopic.ExperimentId\n"
+                    + "              order by  PubTopic.ExperimentId, PubProject.ProjectId, NormWeight Desc,PubTopic.ExperimentId";
+
+            statement.executeUpdate(SQLstr);
+
+            logger.info("Funder Topic distribution");
+            SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                    + "SELECT '', PubTopic.TopicId, Project.funder,'Funder',\n"
+                    + "           round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "             PubTopic.ExperimentId\n"
+                    + "      FROM PubTopic\n"
+                    + "      INNER JOIN  PubProject ON PubTopic.PubId = PubProject.PubId AND PubTopic.weight > 0.1\n"
+                    + "      and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "      INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
+                    + "           INNER JOIN (SELECT Project.funder, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "           FROM PubTopic\n"
+                    + "           INNER JOIN   PubProject ON PubTopic.PubId = PubProject.PubId AND  PubTopic.weight > 0.1\n"
+                    + "           INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
+                    + "           GROUP BY  ExperimentId,Project.funder)\n"
+                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = Project.funder AND \n"
+                    + "                                           SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId                                            \n"
+                    + "     GROUP BY Project.funder,\n"
+                    + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
+                    + "              PubTopic.TopicId,\n"
+                    + "              PubTopic.ExperimentId\n"
+                    + "              order by  PubTopic.ExperimentId, Project.funder, NormWeight Desc,PubTopic.ExperimentId";
+
+            statement.executeUpdate(SQLstr);
+
+            logger.info("Funder Trend Topic distribution");
+
+            SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                    + "SELECT Publication.batchId, PubTopic.TopicId, Project.funder,'FunderTrend',\n"
+                    + "           round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "             PubTopic.ExperimentId\n"
+                    + "      FROM PubTopic\n"
+                    + "      INNER JOIN Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1\n"
+                    + "      and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "      INNER JOIN  PubProject ON PubTopic.PubId = PubProject.PubId \n"
+                    + "      INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
+                    + "           INNER JOIN (SELECT Project.funder, Publication.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "           FROM PubTopic\n"
+                    + "           Inner Join Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1           \n"
+                    + "           INNER JOIN   PubProject ON PubTopic.PubId = PubProject.PubId \n"
+                    + "           INNER JOIN  Project ON PubProject.ProjectId = Project.ProjectId \n"
+                    + "           GROUP BY  Project.funder,Publication.batchId,ExperimentId)\n"
+                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = Project.funder AND \n"
+                    + "                                           SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId  AND                                          \n"
+                    + "                                           SumTopicWeightPerProjectView.batchId = Publication.batchId\n"
+                    + "     GROUP BY Project.funder,\n"
+                    + "         Publication.batchId,\n"
+                    + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
+                    + "              PubTopic.TopicId,\n"
+                    + "              PubTopic.ExperimentId\n"
+                    + "              order by  PubTopic.ExperimentId, Project.funder, NormWeight Desc,PubTopic.ExperimentId";
+
+            statement.executeUpdate(SQLstr);
+
+            logger.info("Entity and trends topic distribution finished");
+
+        } catch (SQLException e) {
+            // if the error message is "out of memory", 
+            // it probably means no database file is found
+            System.err.println(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                System.err.println(e);
+            }
+        }
+
+        logger.info("Topic similarities calculation finished");
+
+    }
+
     public void CalcTopicSimilarities(String SQLLitedb) {
 
         Connection connection = null;
@@ -1310,7 +1448,7 @@ public class PTMExperiment {
         logger.info("Pub citation similarities calculation finished");
     }
 
-    public void calcSimilaritiesAndTrends(String SQLLitedb, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
+    public void calcSimilarities(String SQLLitedb, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
         //calc similarities
 
         logger.info("similarities calculation Started");
@@ -1813,17 +1951,13 @@ public class PTMExperiment {
                                 instanceBuffer.get(1).add(new Instance(tmpStr, null, rs.getString("pubId"), "DBPediaResource"));
                             }
                         }
-                        
+
                         if (numModalities > 2) {
                             String tmpStr = rs.getString("Grants");//.replace("\t", ",");
                             if (tmpStr != null && !tmpStr.equals("")) {
                                 instanceBuffer.get(2).add(new Instance(tmpStr, null, rs.getString("pubId"), "Grant"));
                             }
                         }
-                        
-                        
-                       
-                        
 
                         ;
                         break;
@@ -2016,7 +2150,7 @@ public class PTMExperiment {
                         instance = instances[m].get(0);
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) ) ? pruneLblCnt * 3 : pruneLblCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR)) ? pruneLblCnt * 3 : pruneLblCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
@@ -2051,8 +2185,6 @@ public class PTMExperiment {
         return instances;
 
     }
-    
-  
 
     public void createRefACMTables(String SQLLitedb) {
         //String SQLLitedb = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
