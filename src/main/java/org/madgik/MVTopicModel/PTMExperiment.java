@@ -2408,7 +2408,7 @@ public class PTMExperiment {
 /*
  if (!new File(txtAlphabetFile).exists()) {
 
- GenerateAlphabets(SQLLitedb, experimentType, dictDir, numModalities, pruneCnt, pruneLblCnt, pruneMaxPerc, pruneMinPerc);
+ GenerateAlphabets(SQLLitedb, experimentType, dictDir, numModalities, pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, pruneMinPerc);
 
  }
  //read alphabets
@@ -2606,6 +2606,6 @@ public class PTMExperiment {
  //                }
            
  String batchId = "-1";
- InstanceList[] instances = GenerateAlphabets(SQLLitedb, experimentType, dictDir, numModalities, pruneCnt, pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars);
+ InstanceList[] instances = GenerateAlphabets(SQLLitedb, experimentType, dictDir, numModalities, pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, pruneMinPerc, numChars);
  logger.info(" instances added through pipe");
  */

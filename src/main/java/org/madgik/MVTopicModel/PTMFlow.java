@@ -65,11 +65,12 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.HEALTHTenderPM;
-    int pruneCnt = 300;
-    int pruneLblCnt = 25;
-    double pruneMaxPerc = 0.1;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
-    double pruneMinPerc = 0.05;//Remove features that occur in more than (X*100)% of documents. 0.05 is equivalent to IDF of 3.0.
+    ExperimentType experimentType = ExperimentType.ACM;
+    
+    double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
+    double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
+    double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
+    
     boolean ACMAuthorSimilarity = true;
     boolean calcTopicDistributionsAndTrends = false;
     boolean calcEntitySimilarities = true;
@@ -77,8 +78,8 @@ public class PTMFlow {
     boolean calcPPRSimilarities = false;
     boolean runTopicModelling = true;
     boolean runWordEmbeddings = false;
-    boolean useTypeVectors = false;
-    boolean trainTypeVectors = false;
+    boolean useTypeVectors = true;
+    boolean trainTypeVectors = true;
     boolean findKeyPhrases = false;
     double useTypeVectorsProb = 0.6;
     Net2BoWType PPRenabled = Net2BoWType.OneWay;
@@ -102,7 +103,7 @@ public class PTMFlow {
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" + pruneCnt + "_" + pruneLblCnt + "PRN" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
+                + numIterations + "IT_" + numChars + "CHRs_" +pruneMaxPerc+" "+ pruneCntPerc + "_" + pruneLblCntPerc + "PRN" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
 
         String experimentDescription = experimentString + ": \n";
 
@@ -120,8 +121,8 @@ public class PTMFlow {
 
         if (runWordEmbeddings) {
             logger.info(" calc word embeddings starting");
-            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCnt,
-                    pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars, PPRenabled,
+            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
+                    pruneLblCntPerc, pruneMaxPerc,numChars, PPRenabled,
                     experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
             logger.info(" instances added through pipe");
 
@@ -144,8 +145,8 @@ public class PTMFlow {
 
             logger.info(" TopicModelling has started");
             String batchId = "-1";
-            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCnt,
-                    pruneLblCnt, pruneMaxPerc, pruneMinPerc, numChars, PPRenabled,
+            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
+                    pruneLblCntPerc, pruneMaxPerc,  numChars, PPRenabled,
                     experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
             logger.info("Instances added through pipe");
 
@@ -300,8 +301,9 @@ public class PTMFlow {
             numChars = Integer.parseInt(prop.getProperty("NumOfChars"));
             burnIn = Integer.parseInt(prop.getProperty("BurnIn"));
             optimizeInterval = Integer.parseInt(prop.getProperty("OptimizeInterval"));
-            pruneCnt = Integer.parseInt(prop.getProperty("PruneCnt"));
-            pruneLblCnt = Integer.parseInt(prop.getProperty("PruneLblCnt"));
+            pruneCntPerc = Double.parseDouble(prop.getProperty("PruneCntPerc"));
+            pruneLblCntPerc = Double.parseDouble(prop.getProperty("PruneLblCntPerc"));
+            pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc"));
             SQLConnectionString = prop.getProperty("SQLConnectionString");
             experimentId = prop.getProperty("ExperimentId");
 
@@ -344,8 +346,8 @@ public class PTMFlow {
 //            prop.setProperty("burnIn", burnIn);
 //            prop.setProperty("optimizeInterval", optimizeInterval);
 //            prop.setProperty("experimentType", experimentType);
-//            prop.setProperty("pruneCnt", pruneCnt);
-//            prop.setProperty("pruneLblCnt", pruneLblCnt);
+//            prop.setProperty("pruneCntPerc", pruneCntPerc);
+//            prop.setProperty("pruneLblCntPerc", pruneLblCntPerc);
 //            prop.setProperty("pruneMaxPerc", pruneMaxPerc);
 //            prop.setProperty("pruneMinPerc", pruneMinPerc);
 //            prop.setProperty("calcEntitySimilarities", calcEntitySimilarities);
@@ -631,7 +633,7 @@ public class PTMFlow {
         // FeatureVector.toSimpFilefff
     }
 
-    private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount, double docProportionMaxCutoff, double docProportionMinCutoff, boolean preserveCase)
+    private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount, double docProportionMaxCutoff,  boolean preserveCase)
             throws IOException {
 
         //SimpleTokenizer st = new SimpleTokenizer(new File("stoplists/en.txt"));
@@ -1565,7 +1567,7 @@ public class PTMFlow {
     }
 
     public InstanceList[] GenerateAlphabets(String SQLConnection, ExperimentType experimentType, String dictDir, byte numModalities,
-            int pruneCnt, int pruneLblCnt, double pruneMaxPerc, double pruneMinPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText) {
+            double pruneCntPerc, double pruneLblCntPerc, double pruneMaxPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText) {
 
         //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
         // Begin by importing documents from text to feature sequences
@@ -1614,7 +1616,7 @@ public class PTMFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "select pubviewtxt.pubId, text, fulltext from pubviewtxt";
+            String txtsql = "select pubviewtxt.pubId, text, fulltext from pubviewtxt LIMIT 100000";
 
             if (experimentType == ExperimentType.HEALTHTender) {
                 txtsql = "select distinct on (pubviewtxt.pubId) pubviewtxt.pubId, text, fulltext from pubviewtxt"
@@ -1933,8 +1935,8 @@ public class PTMFlow {
 
         if (!ignoreText) {
             try {
-                pruneCnt = instanceBuffer.get(0).size() / 2000;
-                GenerateStoplist(tokenizer, instanceBuffer.get(0), pruneCnt, pruneMaxPerc, pruneMinPerc, false);
+                int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * pruneCntPerc);
+                GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, pruneMaxPerc,  false);
                 instances[0].addThruPipe(instanceBuffer.get(0).iterator());
                 //Alphabet tmpAlp = instances[0].getDataAlphabet();
                 //ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(txtAlphabetFile)));
@@ -1958,7 +1960,7 @@ public class PTMFlow {
 
         // pruning for all other modalities no text
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
-            if ((m == 0 && pruneCnt > 0) || (m > 0 && pruneLblCnt > 0)) {
+            if ( pruneLblCntPerc > 0) {
 
                 // Check which type of data element the instances contain
                 Instance firstInstance = instances[m].get(0);
@@ -1992,7 +1994,7 @@ public class PTMFlow {
                         instance = instances[m].get(0);
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
-                        int prCnt = instanceBuffer.get(m).size() / 2000;
+                        int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
                         fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) ? prCnt * 2 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
