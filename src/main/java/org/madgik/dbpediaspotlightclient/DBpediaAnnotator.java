@@ -230,7 +230,7 @@ public class DBpediaAnnotator {
         
         Connection connection = null;
         
-        int queueSize = 10;
+        int queueSize = 1000;
         
         BlockingQueue<pubText> pubsQueue = new ArrayBlockingQueue<pubText>(queueSize);
         
@@ -257,7 +257,8 @@ public class DBpediaAnnotator {
             else if (experimentType == ExperimentType.OpenAIRE) {
                 // sql = "select pubId, text, fulltext, keywords from pubview WHERE  PubView.PubId NOT IN (select distinct pubId from pubdbpediaresource)";// LIMIT 100000";
                 // optimized query: hashing is much faster than seq scan
-                sql = "select pubview.pubId, text, fulltext, keywords from pubview LEFT JOIN pubdbpediaresource ON (pubview.pubId = pubdbpediaresource.pubId) where pubdbpediaresource.pubId is null";
+                //sql = "select pubview.pubId, text, fulltext, keywords from pubview LEFT JOIN pubdbpediaresource ON (pubview.pubId = pubdbpediaresource.pubId) where pubdbpediaresource.pubId is null";
+                sql = "select pmtxtview.pubId, text, '' AS keywords from pmtxtview LEFT JOIN pubdbpediaresource ON (pmtxtview.pubId = pubdbpediaresource.pubId) where pubdbpediaresource.pubId is null";
             }
             
             connection.setAutoCommit(false);
