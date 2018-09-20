@@ -205,8 +205,10 @@ public class WordEmbeddings {
         System.out.println("done counting: " + totalWords);
     }
 
-    public void train(InstanceList instances, int numThreads, int numSamples) {
+    public void train(InstanceList instances, int numThreads, int numSamples, int numOfIterations) {
 
+        numIterations = numOfIterations;
+        
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
 
         WordEmbeddingRunnable[] runnables = new WordEmbeddingRunnable[numThreads];
@@ -352,12 +354,12 @@ public class WordEmbeddings {
             if (!SQLLiteDB.isEmpty()) {
                 connection = DriverManager.getConnection(SQLLiteDB);
                 statement = connection.createStatement();
-                statement.executeUpdate("drop table if exists WordVector");
-                statement.executeUpdate("create table if not exists WordVector (Word nvarchar(50), ColumnId Integer, Weight Double, modality int ) ");
+                statement.executeUpdate("drop table if exists wordvector");
+                statement.executeUpdate("create table if not exists wordvector (word text, columnid integer, weight numeric, modality integer ) ");
                 //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
             }
             PreparedStatement bulkInsert = null;
-            String sql = "insert into WordVector values(?,?,?,? );";
+            String sql = "insert into wordvector values(?,?,?,? );";
 
             try {
                 connection.setAutoCommit(false);
@@ -375,6 +377,7 @@ public class WordEmbeddings {
                         bulkInsert.setDouble(3, weights[word * stride + col]);
                         bulkInsert.setInt(4, modality);
                         bulkInsert.executeUpdate();
+                       
                     }
                 }
 
@@ -476,7 +479,7 @@ public class WordEmbeddings {
 
         WordEmbeddings matrix = new WordEmbeddings(instances.getDataAlphabet(), numDimensions.value, windowSizeOption.value);
         matrix.queryWord = exampleWord.value;
-        matrix.setNumIterations(numIterationsOption.value);
+        //matrix.setNumIterations(numIterationsOption.value);
         matrix.countWords(instances, samplingFactorOption.value);
         if (orderingOption.value != null) {
             if (orderingOption.value.startsWith("s")) { matrix.orderingStrategy = SHUFFLED_ORDERING; }
@@ -487,7 +490,7 @@ public class WordEmbeddings {
             }
         }
         
-        matrix.train(instances, numThreads.value, numSamples.value);
+        matrix.train(instances, numThreads.value, numSamples.value, numIterationsOption.value);
         
         PrintWriter out = new PrintWriter(outputFile.value, Charset.defaultCharset().name());
         if (outputStatsLine.value) {

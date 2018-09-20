@@ -213,7 +213,7 @@ public class PTMExperiment {
             WordEmbeddings matrix = new WordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption);
             matrix.setQueryWord("mining");
             matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
-            matrix.train(instances[0], numOfThreads, numSamples);
+            matrix.train(instances[0], numOfThreads, numSamples, 5); //iterations
 
             //PrintWriter out = new PrintWriter("vectors.txt");
             //matrix.write(out);

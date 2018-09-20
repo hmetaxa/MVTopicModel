@@ -73,11 +73,11 @@ public class PTMFlow {
     
     boolean ACMAuthorSimilarity = true;
     boolean calcTopicDistributionsAndTrends = false;
-    boolean calcEntitySimilarities = true;
+    boolean calcEntitySimilarities = false;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = true;
-    boolean runWordEmbeddings = false;
+    boolean runTopicModelling = false;
+    boolean runWordEmbeddings = true;
     boolean useTypeVectors = true;
     boolean trainTypeVectors = true;
     boolean findKeyPhrases = false;
@@ -129,16 +129,17 @@ public class PTMFlow {
             //int numDimensions = 50;
             int windowSizeOption = 5;
             int numSamples = 5;
+            int numIterations = 5;
             WordEmbeddings matrix = new WordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption);
             matrix.queryWord = "mining";
             matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
-            matrix.train(instances[0], numOfThreads, numSamples);
-
+            matrix.train(instances[0], numOfThreads, numSamples, numIterations);
+            logger.info(" calc word embeddings ended");
             //PrintWriter out = new PrintWriter("vectors.txt");
             //matrix.write(out);
             //out.close();
             matrix.write(SQLConnectionString, 0);
-            logger.info(" calc word embeddings ended");
+            logger.info(" writing word embeddings ended");
         }
 
         if (runTopicModelling) {
