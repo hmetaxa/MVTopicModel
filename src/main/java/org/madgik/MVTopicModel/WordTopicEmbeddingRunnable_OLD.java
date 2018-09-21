@@ -4,9 +4,9 @@ import org.madgik.utils.MixTopicModelTopicAssignment;
 import java.util.*;
 import cc.mallet.types.*;
 
-public class WordTopicEmbeddingRunnable implements Runnable {
+public class WordTopicEmbeddingRunnable_OLD implements Runnable {
 
-    public WordTopicEmbeddings model;
+    public WordTopicEmbeddings_OLD model;
     //public InstanceList instances;
     public ArrayList<MixTopicModelTopicAssignment> data;  // the training instances and their topic assignments
     public int numSamples;
@@ -30,7 +30,7 @@ public class WordTopicEmbeddingRunnable implements Runnable {
 
     public int wordsSoFar = 0;
 
-    public WordTopicEmbeddingRunnable(WordTopicEmbeddings model, ArrayList<MixTopicModelTopicAssignment> data, int numSamples, int numThreads, int threadID, int numWords, int numTopics) {
+    public WordTopicEmbeddingRunnable_OLD(WordTopicEmbeddings_OLD model, ArrayList<MixTopicModelTopicAssignment> data, int numSamples, int numThreads, int threadID, int numWords, int numTopics) {
         this.model = model;
         this.stride = model.stride;
         this.data = data;

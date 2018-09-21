@@ -76,8 +76,8 @@ public class PTMFlow {
     boolean calcEntitySimilarities = false;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = false;
-    boolean runWordEmbeddings = true;
+    boolean runTopicModelling = true;
+    boolean runWordEmbeddings = false;
     boolean useTypeVectors = true;
     boolean trainTypeVectors = true;
     boolean findKeyPhrases = false;
@@ -130,7 +130,7 @@ public class PTMFlow {
             int windowSizeOption = 5;
             int numSamples = 5;
             int numIterations = 5;
-            WordEmbeddings matrix = new WordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption);
+            TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption,0);
             matrix.queryWord = "mining";
             matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
             matrix.train(instances[0], numOfThreads, numSamples, numIterations);

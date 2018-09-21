@@ -461,7 +461,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
 
                     //If WordVect
                     newTopic = -1;
-                    if (useTypeVectors) {
+                  /*  if (useTypeVectors) {
                         double nextUniform = ThreadLocalRandom.current().nextDouble();
                         if (nextUniform > useTypeVectorsProb) { //TODO: Use MH instead (or additionaly)
                             double sample = ThreadLocalRandom.current().nextDouble() * typeTopicSimilarity[type][oldTopic][numTopics-1];
@@ -474,7 +474,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                                 //throw new IllegalStateException ("WorkerRunnable: New topic not sampled.");
                             }
                         }
-                    }
+                    }*/
                     //public boolean trainTypeVectors;
 
                     //		compute word / doc mass for binary search

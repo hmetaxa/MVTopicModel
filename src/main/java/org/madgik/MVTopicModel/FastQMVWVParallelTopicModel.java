@@ -716,7 +716,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             }
         }
 
-        if (useTypeVectors) {
+        if (useTypeVectors && ! trainTypeVectors) {
             readWordVectorsDB(SQLLiteDB, vectorSize);
         }
         initializeHistograms();
@@ -1365,10 +1365,10 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                         int windowSizeOption = 5;
                         int numSamples = 5;
-                        WordTopicEmbeddings matrix = new WordTopicEmbeddings(alphabet[0], vectorSize, windowSizeOption, numTopics);
+                        TopicWordEmbeddings matrix = new TopicWordEmbeddings(alphabet[0], vectorSize, windowSizeOption, numTopics);
                         matrix.queryWord = "mining";
-                        matrix.countWords(data);
-                        matrix.train(data, numThreads, numSamples);
+                        matrix.countWords(data, 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
+                        matrix.train(data, numThreads, numSamples, 5);//numOfIterations
 
                         topicVectors = matrix.getTopicVectors();
                         typeVectors = matrix.getWordVectors();

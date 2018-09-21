@@ -14,28 +14,28 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.concurrent.*;
 
-public class WordTopicEmbeddings {
+public class WordTopicEmbeddings_OLD {
 
-    static CommandOption.String inputFile = new CommandOption.String(WordTopicEmbeddings.class, "input", "FILENAME", true, null,
+    static CommandOption.String inputFile = new CommandOption.String(WordTopicEmbeddings_OLD.class, "input", "FILENAME", true, null,
             "The filename from which to read the list of training instances.  Use - for stdin.  "
             + "The instances must be FeatureSequence or FeatureSequenceWithBigrams, not FeatureVector", null);
 
-    static CommandOption.String outputFile = new CommandOption.String(WordTopicEmbeddings.class, "output", "FILENAME", true, "weights.txt",
+    static CommandOption.String outputFile = new CommandOption.String(WordTopicEmbeddings_OLD.class, "output", "FILENAME", true, "weights.txt",
             "The filename to write text-formatted word vectors.", null);
 
-    static CommandOption.Integer numDimensions = new CommandOption.Integer(WordTopicEmbeddings.class, "num-dimensions", "INTEGER", true, 50,
+    static CommandOption.Integer numDimensions = new CommandOption.Integer(WordTopicEmbeddings_OLD.class, "num-dimensions", "INTEGER", true, 50,
             "The number of dimensions to fit.", null);
 
-    static CommandOption.Integer windowSizeOption = new CommandOption.Integer(WordTopicEmbeddings.class, "window-size", "INTEGER", true, 5,
+    static CommandOption.Integer windowSizeOption = new CommandOption.Integer(WordTopicEmbeddings_OLD.class, "window-size", "INTEGER", true, 5,
             "The number of adjacent words to consider.", null);
 
-    static CommandOption.Integer numThreads = new CommandOption.Integer(WordTopicEmbeddings.class, "num-threads", "INTEGER", true, 1,
+    static CommandOption.Integer numThreads = new CommandOption.Integer(WordTopicEmbeddings_OLD.class, "num-threads", "INTEGER", true, 1,
             "The number of threads for parallel training.", null);
 
-    static CommandOption.Integer numSamples = new CommandOption.Integer(WordTopicEmbeddings.class, "num-samples", "INTEGER", true, 5,
+    static CommandOption.Integer numSamples = new CommandOption.Integer(WordTopicEmbeddings_OLD.class, "num-samples", "INTEGER", true, 5,
             "The number of negative samples to use in training.", null);
 
-    static CommandOption.String exampleWord = new CommandOption.String(WordTopicEmbeddings.class, "example-word", "STRING", true, null,
+    static CommandOption.String exampleWord = new CommandOption.String(WordTopicEmbeddings_OLD.class, "example-word", "STRING", true, null,
             "If defined, periodically show the closest vectors to this word.", null);
 
     Alphabet vocabulary;
@@ -67,10 +67,10 @@ public class WordTopicEmbeddings {
 
     Randoms random = new Randoms();
 
-    public WordTopicEmbeddings() {
+    public WordTopicEmbeddings_OLD() {
     }
 
-    public WordTopicEmbeddings(Alphabet a, int numColumns, int windowSize, int numTopics) {
+    public WordTopicEmbeddings_OLD(Alphabet a, int numColumns, int windowSize, int numTopics) {
         vocabulary = a;
 
         numWords = vocabulary.size();
@@ -227,9 +227,9 @@ public class WordTopicEmbeddings {
         this.data = data;
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
 
-        WordTopicEmbeddingRunnable[] runnables = new WordTopicEmbeddingRunnable[numThreads];
+        WordTopicEmbeddingRunnable_OLD[] runnables = new WordTopicEmbeddingRunnable_OLD[numThreads];
         for (int thread = 0; thread < numThreads; thread++) {
-            runnables[thread] = new WordTopicEmbeddingRunnable(this, data, numSamples, numThreads, thread, numWords, numTopics);
+            runnables[thread] = new WordTopicEmbeddingRunnable_OLD(this, data, numSamples, numThreads, thread, numWords, numTopics);
             executor.submit(runnables[thread]);
         }
 
@@ -463,13 +463,13 @@ public class WordTopicEmbeddings {
 
     public static void main(String[] args) throws Exception {
         // Process the command-line options
-        CommandOption.setSummary(WordTopicEmbeddings.class,
+        CommandOption.setSummary(WordTopicEmbeddings_OLD.class,
                 "Train continuous word embeddings using the skip-gram method with negative sampling.");
-        CommandOption.process(WordTopicEmbeddings.class, args);
+        CommandOption.process(WordTopicEmbeddings_OLD.class, args);
 
         InstanceList instances = InstanceList.load(new File(inputFile.value));
 
-        WordTopicEmbeddings matrix = new WordTopicEmbeddings(instances.getDataAlphabet(), numDimensions.value, windowSizeOption.value, 0);
+        WordTopicEmbeddings_OLD matrix = new WordTopicEmbeddings_OLD(instances.getDataAlphabet(), numDimensions.value, windowSizeOption.value, 0);
         matrix.queryWord = exampleWord.value;
         matrix.countWords(instances);
         matrix.train(instances, numThreads.value, numSamples.value);
