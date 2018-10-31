@@ -65,21 +65,21 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.ACM;
+    ExperimentType experimentType = ExperimentType.HEALTHTenderPM;
     
     double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
     
     boolean ACMAuthorSimilarity = true;
-    boolean calcTopicDistributionsAndTrends = false;
-    boolean calcEntitySimilarities = false;
+    boolean calcTopicDistributionsAndTrends = true;
+    boolean calcEntitySimilarities = true;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
     boolean runTopicModelling = true;
     boolean runWordEmbeddings = false;
-    boolean useTypeVectors = true;
-    boolean trainTypeVectors = true;
+    boolean useTypeVectors = false;
+    boolean trainTypeVectors = false;
     boolean findKeyPhrases = false;
     double useTypeVectorsProb = 0.6;
     Net2BoWType PPRenabled = Net2BoWType.OneWay;
@@ -667,7 +667,8 @@ public class PTMFlow {
             //if (docProportionMaxCutoff < 1.0 || docProportionMinCutoff > 0) {
             pipes.add(docCounter);
         }
-
+        //TODO: TEST pipes.add(new FeatureSequenceRemovePlural(alphabet));
+        
         Pipe serialPipe = new SerialPipes(pipes);
         Iterator<Instance> iterator = serialPipe.newIteratorFrom(input.iterator());
 
@@ -1583,7 +1584,7 @@ public class PTMFlow {
 
         Alphabet alphabet = new Alphabet();
         pipeListText.add(new StringList2FeatureSequence(alphabet));
-        pipeListText.add(new FeatureSequenceRemovePlural(alphabet));
+        //pipeListText.add(new FeatureSequenceRemovePlural(alphabet));
 
         ArrayList<ArrayList<Instance>> instanceBuffer = new ArrayList<ArrayList<Instance>>(numModalities);
         InstanceList[] instances = new InstanceList[numModalities];
@@ -1599,7 +1600,7 @@ public class PTMFlow {
 
             if (m == 1 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM) //keywords
             {
-                pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
+              //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
             instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
         }
@@ -1624,7 +1625,7 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pubviewtxt.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewtxt.pubId \n"
-                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova', 'WT', 'NIH')) OR (pubviewtxt.referenceid like 'PMC%') "
+                        + "                         WHERE ((pubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewtxt.pubyear>='2004'"
                         ;//+ " LIMIT 10000";
             }
 
@@ -1633,7 +1634,7 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewtxt.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewtxt.pubId \n"
-                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova', 'WT', 'NIH')) OR (pmpubviewtxt.referenceid like 'PMC%') ";
+                        + "                         WHERE ((pmpubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewtxt.pubyear>='2004'";
                         //+ " LIMIT 1000";
             }
 
@@ -1657,7 +1658,7 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pubviewsideinfo.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewsideinfo.pubId \n"
-                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewsideinfo.referenceid like 'PMC%')"
+                        + "                         WHERE ((pubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewsideinfo.pubyear>='2004'"
                         ;//+ " LIMIT 10000";
 
             } else if (experimentType == ExperimentType.HEALTHTenderPM) {
@@ -1665,7 +1666,7 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewsideinfo.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewsideinfo.pubId \n"
-                        + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pmpubviewsideinfo.referenceid like 'PMC%')";
+                        + "                         WHERE ((pmpubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewsideinfo.pubyear>='2004'";
                 //+ " LIMIT 1000";
 
             }
@@ -1851,7 +1852,7 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewdbpedia.pubId \n"
-                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewdbpedia.referenceid like 'PMC%')"
+                            + "                         WHERE ((pubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewdbpedia.pubyear>='2004'"
                             ;//+ " LIMIT 10000";
 
                 }
@@ -1860,7 +1861,7 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewdbpedia.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewdbpedia.pubId \n"
-                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pmpubviewdbpedia.referenceid like 'PMC%')";
+                            + "                         WHERE ((pmpubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewdbpedia.pubyear>='2004'";
                     // + " LIMIT 1000";
 
                 }
@@ -1899,7 +1900,7 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewfunding.pubId \n"
-                            + "                         WHERE (fundinglevel2='FP7-HEALTH') OR (pubfunder.funder IN ('SRC','Vinnova',  'WT', 'NIH')) OR (pubviewfunding.referenceid like 'PMC%')"
+                            + "                         WHERE ((pubviewfunding.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewfunding.pubyear>='2004'"
                             ;//+ " LIMIT 10000";
                 }
                 ResultSet rs = txtstatement.executeQuery(SQLquery);
