@@ -338,7 +338,7 @@ public class TopicWordEmbeddings {
             //variances();
             difference = 0.0;
 
-            if (!anyRunning || wordsSoFar > numIterations * totalWords) {
+            if (!anyRunning || (long) wordsSoFar > (long) numIterations * (long) totalWords) {
                 finished = true;
                 for (int thread = 0; thread < numThreads; thread++) {
                     runnables[thread].shouldRun = false;

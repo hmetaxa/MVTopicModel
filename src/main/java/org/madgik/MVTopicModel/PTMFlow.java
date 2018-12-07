@@ -72,11 +72,11 @@ public class PTMFlow {
     double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
     
     boolean ACMAuthorSimilarity = true;
-    boolean calcTopicDistributionsAndTrends = true;
-    boolean calcEntitySimilarities = true;
-    boolean calcTopicSimilarities = false;
+    boolean calcTopicDistributionsAndTrends = false;
+    boolean calcEntitySimilarities = false;
+    boolean calcTopicSimilarities = true;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = true;
+    boolean runTopicModelling = false;
     boolean runWordEmbeddings = false;
     boolean useTypeVectors = false;
     boolean trainTypeVectors = false;
@@ -103,7 +103,7 @@ public class PTMFlow {
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" +pruneMaxPerc+" "+ pruneCntPerc + "_" + pruneLblCntPerc + "PRN" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
+                + numIterations + "IT_" + numChars + "CHRs_" +String.format("%.1f_%.4f_%.4f", pruneMaxPerc,  pruneCntPerc ,  pruneLblCntPerc) + "PRN_" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
 
         String experimentDescription = experimentString + ": \n";
 
@@ -122,18 +122,20 @@ public class PTMFlow {
         if (runWordEmbeddings) {
             logger.info(" calc word embeddings starting");
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc,numChars, PPRenabled,
+                    pruneLblCntPerc, pruneMaxPerc,  numChars, PPRenabled,
                     experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
+
             logger.info(" instances added through pipe");
 
             //int numDimensions = 50;
             int windowSizeOption = 5;
             int numSamples = 5;
-            int numIterations = 5;
-            TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption,0);
-            matrix.queryWord = "mining";
+            int numEpochs = 5;
+            WordEmbeddings matrix = new WordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption);
+            //TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption,0);
+            matrix.queryWord = "skin";
             matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
-            matrix.train(instances[0], numOfThreads, numSamples, numIterations);
+            matrix.train(instances[0], numOfThreads, numSamples, numEpochs);
             logger.info(" calc word embeddings ended");
             //PrintWriter out = new PrintWriter("vectors.txt");
             //matrix.write(out);
@@ -265,7 +267,8 @@ public class PTMFlow {
         }
 
         if (calcTopicSimilarities) {
-            CalcTopicSimilarities(SQLConnectionString);
+            experimentId =  "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
+            CalcTopicSimilarities(SQLConnectionString, experimentId);
         }
 
         if (calcPPRSimilarities) {
@@ -949,7 +952,7 @@ public class PTMFlow {
 
     }
 
-    public void CalcTopicSimilarities(String SQLLitedb) {
+    public void CalcTopicSimilarities(String SQLLitedb, String experimentId) {
 
         Connection connection = null;
         try {
@@ -961,6 +964,7 @@ public class PTMFlow {
 
             String distinctTopicsSQL = "Select  TopicId,  ExperimentId, count(*) as cnt\n"
                     + "from TopicVector\n  "
+                    + ( StringUtils.isBlank(experimentId)? "" : String.format("where experimentId = '%s' \n  ", experimentId))
                     + "group by TopicId,  ExperimentId";
 
             ResultSet rs = statement.executeQuery(distinctTopicsSQL);

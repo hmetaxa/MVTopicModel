@@ -74,7 +74,7 @@ public class WordEmbeddings {
     int[] samplingTable;
     int samplingTableSize = 100000000;
     double samplingSum = 0.0;
-    int totalWords = 0;
+    long totalWords = 0;
 
     double maxExpValue = 6.0;
     double minExpValue = -6.0;
@@ -248,7 +248,7 @@ public class WordEmbeddings {
             //variances();
             difference = 0.0;
 
-            if (! anyRunning || wordsSoFar > numIterations * totalWords) {
+            if (! anyRunning || (long) wordsSoFar > (long) numIterations * (long) totalWords) {
                 finished = true;
                 for (int thread = 0; thread < numThreads; thread++) {
                     runnables[thread].shouldRun = false;
