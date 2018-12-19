@@ -64,6 +64,7 @@ public class TopicWordEmbeddings {
     int numTopics;
     int numVectors;
     int numColumns;
+    int numContextColumns;
     double[] weights;
     double[] negativeWeights;
     int stride;
@@ -121,7 +122,7 @@ public class TopicWordEmbeddings {
     public TopicWordEmbeddings() {
     }
 
-    public TopicWordEmbeddings(Alphabet a, int numColumns, int windowSize, int numOfTopics) {
+    public TopicWordEmbeddings(Alphabet a, int numColumns, int numContextColumns, int windowSize, int numOfTopics) {
         vocabulary = a;
 
         numWords = vocabulary.size();
@@ -131,6 +132,7 @@ public class TopicWordEmbeddings {
         System.out.format("Vocab size: %d\n", numWords);
 
         this.numColumns = numColumns;
+        this.numContextColumns = numTopics == 0 ? 0 : numContextColumns;
 
         this.stride = numColumns;
 
@@ -229,8 +231,7 @@ public class TopicWordEmbeddings {
                 oneDocTopics = topicSequence.getFeatures();
 
             }
-*/
-            
+             */
             for (int position = 0; position < length; position++) {
                 int type = tokens.getIndexAtPosition(position);
                 wordCounts[type]++;
@@ -607,7 +608,7 @@ public class TopicWordEmbeddings {
         double[][] result = new double[numTopics][numColumns];
         for (int topic = 0; topic < numTopics; topic++) {
             for (int col = 0; col < numColumns; col++) {
-                result[topic][col] = weights[(numWords+topic) * stride + col];
+                result[topic][col] = weights[(numWords + topic) * stride + col];
             }
         }
 
@@ -622,7 +623,7 @@ public class TopicWordEmbeddings {
 
         InstanceList instances = InstanceList.load(new File(inputFile.value));
 
-        TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances.getDataAlphabet(), numDimensions.value, windowSizeOption.value, 0);
+        TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances.getDataAlphabet(), numDimensions.value, 0, windowSizeOption.value, 0);
         matrix.queryWord = exampleWord.value;
         //matrix.setNumIterations(numIterationsOption.value);
         matrix.countWords(instances, samplingFactorOption.value);

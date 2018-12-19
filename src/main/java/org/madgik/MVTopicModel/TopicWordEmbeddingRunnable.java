@@ -23,6 +23,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
     public Random random;
 
     int numColumns;
+    int numContextColumns;
     int numTopics;
     int numWords;
 
@@ -44,6 +45,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
         random = new Random();
 
         numColumns = model.numColumns;
+        numContextColumns = model.numContextColumns;
         minDocumentLength = model.getMinDocumentLength();
     }
 
@@ -66,7 +68,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
         return result;
     }
 
-    private void gradientLearn(int inputType, int outputType, double learningRate) {
+    private void gradientLearn(int inputType, int outputType, double learningRate, boolean learnContext) {
 
         int inputTypeOffset, outputTypeOffset, sampledTypeOffset, sampledType;
         double innerProduct, weightedResidual;
@@ -82,7 +84,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
         outputTypeOffset = outputType * stride;
 
         innerProduct = 0.0;
-        for (int col = 0; col < numColumns; col++) {
+        for (int col = learnContext ? 0 : numContextColumns; col < (learnContext ? numContextColumns : numColumns); col++) {
             innerProduct += negativeWeights[inputTypeOffset + col] * weights[outputTypeOffset + col];
         }
 
@@ -94,7 +96,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
             weightedResidual = learningRate * (1.0 - model.sigmoidCache[(int) Math.floor((innerProduct - model.minExpValue) * cacheScale)]);
         }
 
-        for (int col = 0; col < numColumns; col++) {
+        for (int col = learnContext ? 0 : numContextColumns; col < (learnContext ? numContextColumns : numColumns); col++) {
             gradient[col] = weightedResidual * negativeWeights[inputTypeOffset + col];
             negativeWeights[inputTypeOffset + col] += weightedResidual * weights[outputTypeOffset + col];
         }
@@ -110,7 +112,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
             sampledTypeOffset = sampledType * stride;
 
             innerProduct = 0.0;
-            for (int col = 0; col < numColumns; col++) {
+            for (int col = learnContext ? 0 : numContextColumns; col < (learnContext ? numContextColumns : numColumns); col++) {
                 innerProduct += negativeWeights[sampledTypeOffset + col] * weights[outputTypeOffset + col];
             }
 
@@ -122,7 +124,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
                 weightedResidual = learningRate * -model.sigmoidCache[(int) Math.floor((innerProduct - model.minExpValue) * cacheScale)];
             }
 
-            for (int col = 0; col < numColumns; col++) {
+            for (int col = learnContext ? 0 : numContextColumns; col < (learnContext ? numContextColumns : numColumns); col++) {
                 gradient[col] += weightedResidual * negativeWeights[sampledTypeOffset + col];
                 negativeWeights[sampledTypeOffset + col] += weightedResidual * weights[outputTypeOffset + col];
             }
@@ -132,7 +134,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
         //residual += weightedResidual - meanNegativePrediction;
         numUpdates++;
 
-        for (int col = 0; col < numColumns; col++) {
+        for (int col = learnContext ? 0 : numContextColumns; col < (learnContext ? numContextColumns : numColumns); col++) {
             weights[outputTypeOffset + col] += gradient[col];
         }
 
@@ -191,7 +193,6 @@ public class TopicWordEmbeddingRunnable implements Runnable {
         while (shouldRun) {
             MixTopicModelTopicAssignment doc = data.get(agenda[docID]);
             //Instance instance = data.get(agenda[docID]).Assignments[0].instance;
-            
 
             docID++;
 
@@ -212,15 +213,14 @@ public class TopicWordEmbeddingRunnable implements Runnable {
             }
 
             FeatureSequence tokens = (FeatureSequence) doc.Assignments[0].instance.getData();
-            
-                        
+
             int[] oneDocTopics = null;
             if (numTopics > 0) {
-                
+
                 oneDocTopics = doc.Assignments[0].topicSequence.getFeatures();
 
             }
-            
+
             int originalLength = tokens.getLength();
             int length = 0;
 
@@ -232,7 +232,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
 
                 if (random.nextDouble() < model.retentionProbability[inputType]) {
                     tokenBuffer[length] = inputType;
-                     if (numTopics > 0) {
+                    if (numTopics > 0) {
                         topicsBuffer[length] = oneDocTopics[inputPosition];
                     }
                     length++;
