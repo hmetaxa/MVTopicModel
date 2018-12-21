@@ -250,11 +250,11 @@ public class TopicWordEmbeddingRunnable implements Runnable {
 
                 wordsConsidered++;
                 inputType = tokenBuffer[inputPosition];
-                int topic = 0;
+                int inputtopic = 0;
                 if (numTopics > 0) {
-                    topic = topicsBuffer[inputPosition];
-                    gradientLearn(inputType, numWords + topic, learningRate); //word should also predict its topic
-                    gradientLearn(numWords + topic, inputType, learningRate); //topic should also predict word
+                    inputtopic = topicsBuffer[inputPosition];
+                    gradientLearn(inputType, numWords + inputtopic, learningRate, true); //word context: word should also predict its topic 
+                    gradientLearn(numWords + inputtopic, inputType, learningRate, false); //topic content: topic should also predict word
                 }
 
                 subWindow = random.nextInt(model.windowSize) + 1;
@@ -265,8 +265,13 @@ public class TopicWordEmbeddingRunnable implements Runnable {
                         continue;
                     }
                     outputType = tokenBuffer[outputPosition];
+
                     //if (inputType == outputType) { continue; }
-                    gradientLearn(inputType, outputType, learningRate);
+                    gradientLearn(inputType, outputType, learningRate, false); //word content: word predict other words
+                    if (numTopics > 0) {
+                        int outputtopic = topicsBuffer[outputPosition];
+                        gradientLearn(numWords + inputtopic, numWords + outputtopic, learningRate, true); //topic context: topic predic other topics
+                    }
 
                 }
             }

@@ -65,21 +65,21 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.HEALTHTenderPM;
+    ExperimentType experimentType = ExperimentType.ACM;
     
     double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
     
     boolean ACMAuthorSimilarity = true;
-    boolean calcTopicDistributionsAndTrends = false;
+    boolean calcTopicDistributionsAndTrends = true;
     boolean calcEntitySimilarities = false;
-    boolean calcTopicSimilarities = true;
+    boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = false;
+    boolean runTopicModelling = true;
     boolean runWordEmbeddings = false;
-    boolean useTypeVectors = false;
-    boolean trainTypeVectors = false;
+    boolean useTypeVectors = true;
+    boolean trainTypeVectors = true;
     boolean findKeyPhrases = false;
     double useTypeVectorsProb = 0.6;
     Net2BoWType PPRenabled = Net2BoWType.OneWay;
