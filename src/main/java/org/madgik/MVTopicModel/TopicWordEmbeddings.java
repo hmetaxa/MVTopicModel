@@ -387,7 +387,7 @@ public class TopicWordEmbeddings {
         Arrays.sort(sortedWords);
 
         for (int i = 0; i < 10; i++) {
-            System.out.format("%f\t%d\t%s\n", sortedWords[i].getWeight(), sortedWords[i].getID(), vocabulary.lookupObject(sortedWords[i].getID()));
+            System.out.format("Similar Word: %f\t%d\t%s\n", sortedWords[i].getWeight(), sortedWords[i].getID(), vocabulary.lookupObject(sortedWords[i].getID()));
         }
 
         if (numTopics > 0) {
@@ -417,7 +417,7 @@ public class TopicWordEmbeddings {
             Arrays.sort(sortedTopics);
 
             for (int i = 0; i < 10; i++) {
-                System.out.format("%f\t%d\n", sortedTopics[i].getWeight(), sortedTopics[i].getID());
+                System.out.format("Similar Topic: %f\t%d\n", sortedTopics[i].getWeight(), sortedTopics[i].getID());
             }
         }
     }

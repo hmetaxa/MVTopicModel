@@ -22,6 +22,7 @@ import java.io.*;
 import java.text.NumberFormat;
 
 import cc.mallet.types.*;
+import static cc.mallet.types.MatrixOps.dotProduct;
 import cc.mallet.util.ArrayUtils;
 import cc.mallet.util.Randoms;
 import org.apache.log4j.Logger;
@@ -141,10 +142,16 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
     public String batchId = "";
 
-    public double[][] typeVectors; // Vector representations for tokens per modality < token, vector>
+    public double[][] typeVectors; // Vector representations for tokens -txt only- <token, vector>
     public double[][] topicVectors;// Vector representations for topics < topic, vector>
+
     public int vectorSize = 200; // Number of vector dimensions per modality
     public int[][][] typeTopicSimilarity; //<token, topic, topic>; * 10.000 (similarity: [0,1] * 10000)
+    
+   
+    
+  
+
     public boolean useTypeVectors;
     public boolean trainTypeVectors;
     public double useTypeVectorsProb;
@@ -412,12 +419,13 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         int c = rs.getInt("ColumnId");
                         double weight = rs.getDouble("weight");
                         if (w != -1) {
-                            if (m == 0) {
-                                this.typeVectors[w][c] = weight;
-                            } else if (m == -1) {
+                            if (m == -1) {
                                 this.topicVectors[w][c] = weight;
 
+                            } else if (m == 0) {
+                                this.typeVectors[w][c] = weight;
                             }
+
                         }
 
                     }
@@ -437,19 +445,18 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     }
                 }
 
-                for (int m = 0; m < numModalities; m++) {
-                    for (int i = 0; i < alphabet[m].size(); i++) {
-                        for (int j = 0; j < numTopics; j++) {
-                            //Arrays.fill(this.typeTopicSimilarity[i][j],  0);
-                            if (MatrixOps.absNorm(typeVectors[i]) == 0.0) {
-                                System.out.println("The word \"" + alphabet[0].lookupObject(i)
-                                        + "\" doesn't have a corresponding vector!!!");
-                                //       throw new Exception();
-                            }
+                for (int i = 0; i < alphabet[0].size(); i++) {
+                    for (int j = 0; j < numTopics; j++) {
+                        //Arrays.fill(this.typeTopicSimilarity[i][j],  0);
+                        if (MatrixOps.absNorm(typeVectors[i]) == 0.0) {
+                            System.out.println("The word \"" + alphabet[0].lookupObject(i)
+                                    + "\" doesn't have a corresponding vector!!!");
+                            //       throw new Exception();
                         }
-
                     }
+
                 }
+
             }
         }
     }
@@ -487,40 +494,41 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    private void CalcTopicTypeVectorSimilarities2(int maxNumWords) {
+    private void CalcSoftmaxTopicWordProbabilities() {
 
-        //TODO: WordVector = SUM(WeightInTopic * TopicVector) + WordVector
-        // TopicVector = TopicVector + SUM(WeightOfMostSignificantWordsInTopic * WordVector) 
-        // Update this either on line or once per cycle 
-        double[] totalTopicVector = new double[2 * vectorSize];
-        double[] totalTypeVector = new double[2 * vectorSize]; //
-
+        
+         double[][] expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,token>
+    double[] sumExpValues = new double[numTopics]; // Partition function values per topic 
+        double[][] dotProductValues = new double[numTopics][alphabet[0].size()]; //<topic,token>
+        
         for (int topic = 0; topic < numTopics; topic++) {
-            double[] topicVectorsW = CalcTopicVectorBasedOnWords(maxNumWords, topic);
+            double max = -1000000000.0;
 
             for (int w = 0; w < alphabet[0].size(); w++) {
-                System.arraycopy(typeVectors[w], 0, totalTypeVector, 0, vectorSize);
-                System.arraycopy(topicVectors[topic], 0, totalTypeVector, vectorSize, vectorSize);
-
-                for (int t = 0; t < numTopics; t++) {
-
-                    if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
-                    {
-
-                        System.arraycopy(topicVectorsW, 0, totalTopicVector, 0, vectorSize);
-                        System.arraycopy(topicVectors[t], 0, totalTopicVector, vectorSize, vectorSize);
-
-                        //ArrayUtils.append(topicVectorsW, topicVectors[t]);
-                        double similarity = Math.max(Utils.cosineSimilarity(totalTopicVector, totalTypeVector), 0);
-                        typeTopicSimilarity[w][topic][t] += Math.round(similarity * 1000); //cumulative similarities 
-                        //totalTypeVector = null;
-                        //totalTopicVector = null;
-
-                    }
-
+                //if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
+                //{
+                dotProductValues[topic][w] = dotProduct(typeVectors[w], topicVectors[topic]);
+                if (dotProductValues[topic][w] > max) {
+                    max = dotProductValues[topic][w];
                 }
+                //}
+
             }
+
+            for (int w = 0; w < alphabet[0].size(); w++) {
+                //if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
+                //{
+                expDotProductValues[topic][w] = Math
+                        .exp(dotProductValues[topic][w] - max);
+                sumExpValues[topic] += expDotProductValues[topic][w];
+                //}
+
+            }
+            
+            
+
         }
+
     }
 
 //    private void CalcTopicVectors(int maxNumWords) {
@@ -698,15 +706,15 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         }
 
                         if (topic == -1) {
-                        if (m == 0) {
-                            topic = random.nextInt(numTopics);
-                            activeTopics.add(topic);
-                        } else if (activeTopics.size() > 0) {
+                            if (m == 0) {
+                                topic = random.nextInt(numTopics);
+                                activeTopics.add(topic);
+                            } else if (activeTopics.size() > 0) {
                                 int ind = random.nextInt(activeTopics.size()); //use only topics that are active in modality 0 for each document to avoid local minima and misplaced topic ids
-                            topic = activeTopics.get(ind);
-                        } else {
-                            topic = random.nextInt(numTopics);
-                        }
+                                topic = activeTopics.get(ind);
+                            } else {
+                                topic = random.nextInt(numTopics);
+                            }
                         }
 
                         topics[position] = topic;
@@ -716,7 +724,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             }
         }
 
-        if (useTypeVectors && ! trainTypeVectors) {
+        if (useTypeVectors && !trainTypeVectors) {
             readWordVectorsDB(SQLLiteDB, vectorSize);
         }
         initializeHistograms();
@@ -1371,7 +1379,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         matrix.train(data, numThreads, numSamples, 5);//numOfIterations
 
                         topicVectors = matrix.getTopicVectors();
-                        typeVectors = matrix.getWordVectors();
+                        typeVectors = matrix.getWordVectors(); //TODO: Extend to all modalities
                     }
                     CalcTopicTypeVectorSimilarities(40);
                 }
@@ -2807,7 +2815,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 previousViews.add(m);
 
             }
-            
 
         }
 
@@ -3541,7 +3548,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
         //out.writeObject(docLengthCounts);
         //out.writeObject(topicDocCounts);
-
         //out.writeInt(numIterations);
         //out.writeInt(burninPeriod);
         //out.writeInt(saveSampleInterval);
@@ -3621,7 +3627,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         ois.close();
 
         //topicModel.initializeHistograms();
-
         return topicModel;
     }
 

@@ -254,6 +254,8 @@ public class TopicWordEmbeddingRunnable implements Runnable {
                 if (numTopics > 0) {
                     inputtopic = topicsBuffer[inputPosition];
                     gradientLearn(inputType, numWords + inputtopic, learningRate, true); //word context: word should also predict its topic 
+                    gradientLearn(inputType, numWords + inputtopic, learningRate, false); //word content: word should also predict the content of its topic --> tokens from different modalities should end up with similar content vectors
+                    
                     gradientLearn(numWords + inputtopic, inputType, learningRate, false); //topic content: topic should also predict word
                 }
 
