@@ -146,15 +146,14 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     public double[][] topicVectors;// Vector representations for topics < topic, vector>
 
     public int vectorSize = 200; // Number of vector dimensions per modality
-    public int[][][] typeTopicSimilarity; //<token, topic, topic>; * 10.000 (similarity: [0,1] * 10000)
-    
-   
-    
-  
+    //public int[][][] typeTopicSimilarity; //<token, topic, topic>; * 10.000 (similarity: [0,1] * 10000)
 
     public boolean useTypeVectors;
     public boolean trainTypeVectors;
-    public double useTypeVectorsProb;
+    public double useVectorsLambda = 0;
+    public double vectorsLambda = 0.6;
+    public double[][] expDotProductValues;  //<topic,token>
+    public double[] sumExpValues; // Partition function values per topic 
 
     public String SQLLiteDB;
 
@@ -173,11 +172,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         return ret;
     }
 
-    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta, boolean useCycleProposals, String SQLLiteDB, boolean useTypeVectors, double useTypeVectorsProb, boolean trainTypeVectors) {
+    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta, boolean useCycleProposals, String SQLLiteDB, boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors) {
 
         this.SQLLiteDB = SQLLiteDB;
         this.useTypeVectors = useTypeVectors;
-        this.useTypeVectorsProb = useTypeVectorsProb;
+        this.vectorsLambda = vectorsLambda;
         this.trainTypeVectors = trainTypeVectors;
         this.numModalities = numModalities;
         this.useCycleProposals = useCycleProposals;
@@ -336,14 +335,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
             //this.typeVectors = new double[][]; // Vector representations for tokens per modality <modality, token, vector>
             this.typeVectors = new double[alphabet[0].size()][vectorSize];
-
-            this.typeTopicSimilarity = new int[alphabet[0].size()][numTopics][numTopics];
-
-            for (int i = 0; i < alphabet[0].size(); i++) {
-                for (int j = 0; j < numTopics; j++) {
-                    Arrays.fill(this.typeTopicSimilarity[i][j], 0);
-                }
-            }
+            expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,word>
+            sumExpValues = new double[numTopics]; // Partition function values per topic 
 
             String word = elements[0];
             //TODO: I should only take into account words that have wordvectors...
@@ -383,18 +376,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     public void readWordVectorsDB(String SQLLitedb, int vectorSize) //word vectors for text modality
     {
 
-        //this.typeVectors = new double[][]; // Vector representations for tokens per modality <modality, token, vector>
-        //this.topicVectors = new double[][];
         if (useTypeVectors) {
             this.vectorSize = vectorSize;
 
-            this.typeTopicSimilarity = new int[alphabet[0].size()][numTopics][numTopics];
-
-            for (int i = 0; i < alphabet[0].size(); i++) {
-                for (int j = 0; j < numTopics; j++) {
-                    Arrays.fill(this.typeTopicSimilarity[i][j], 0);
-                }
-            }
+            expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,word>
+            sumExpValues = new double[numTopics]; // Partition function values per topic 
 
             if (trainTypeVectors) {
 
@@ -461,46 +447,10 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    private void CalcTopicTypeVectorSimilarities(int maxNumWords) {
-
-        double[] totalTopicVector = new double[2 * vectorSize];
-        double[] totalTypeVector = new double[2 * vectorSize]; //
-
-        for (int topic = 0; topic < numTopics; topic++) {
-            double[] topicVectorsW = CalcTopicVectorBasedOnWords(maxNumWords, topic);
-
-            for (int w = 0; w < alphabet[0].size(); w++) {
-                System.arraycopy(typeVectors[w], 0, totalTypeVector, 0, vectorSize);
-                System.arraycopy(topicVectors[topic], 0, totalTypeVector, vectorSize, vectorSize);
-
-                for (int t = 0; t < numTopics; t++) {
-
-                    if (MatrixOps.absNorm(typeVectors[w]) != 0.0) // meaning that word vector exists
-                    {
-
-                        System.arraycopy(topicVectorsW, 0, totalTopicVector, 0, vectorSize);
-                        System.arraycopy(topicVectors[t], 0, totalTopicVector, vectorSize, vectorSize);
-
-                        //ArrayUtils.append(topicVectorsW, topicVectors[t]);
-                        double similarity = Math.max(Utils.cosineSimilarity(totalTopicVector, totalTypeVector), 0);
-                        typeTopicSimilarity[w][topic][t] += Math.round(similarity * 1000); //cumulative similarities 
-                        //totalTypeVector = null;
-                        //totalTopicVector = null;
-
-                    }
-
-                }
-            }
-        }
-    }
-
     private void CalcSoftmaxTopicWordProbabilities() {
 
-        
-         double[][] expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,token>
-    double[] sumExpValues = new double[numTopics]; // Partition function values per topic 
         double[][] dotProductValues = new double[numTopics][alphabet[0].size()]; //<topic,token>
-        
+
         for (int topic = 0; topic < numTopics; topic++) {
             double max = -1000000000.0;
 
@@ -524,44 +474,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 //}
 
             }
-            
-            
 
         }
 
     }
 
-//    private void CalcTopicVectors(int maxNumWords) {
-//        ArrayList<ArrayList<TreeSet<IDSorter>>> topicSortedWords = new ArrayList<ArrayList<TreeSet<IDSorter>>>(numModalities);
-//
-//        for (Byte m = 0; m < numModalities; m++) {
-//            topicSortedWords.add(getSortedWords(m));
-//        }
-//
-//        //int[][] topicTypeCounts = new int[numModalities][numTopics];
-//        double[][] topicsDiscrWeight = calcDiscrWeightWithinTopics(topicSortedWords, true);
-//
-//        for (Byte m = 0; m < numModalities; m++) {
-//            for (int topic = 0; topic < numTopics; topic++) {
-//
-//                int topicTypeCount = topicSortedWords.get(m).get(topic).size();
-//                int activeNumWords = Math.min(maxNumWords, 7 * (int) Math.round(topicsDiscrWeight[m][topic] * topicTypeCount));
-//
-//                //logger.info("Active NumWords: " + topic + " : " + activeNumWords);
-//                TreeSet<IDSorter> sortedWords = topicSortedWords.get(m).get(topic);
-//                Iterator<IDSorter> iterator = sortedWords.iterator();
-//
-//                int wordCnt = 0;
-//                while (iterator.hasNext() && wordCnt < activeNumWords) {
-//                    IDSorter info = iterator.next();
-//                    MatrixOps.plusEquals(topicVectors[m][topic], typeVectors[m][info.getID()], info.getWeight() / tokensPerTopic[m][topic]);
-//                    wordCnt++;
-//                }
-//
-//            }
-//
-//        }
-//    }
     private double[] CalcTopicVectorBasedOnWords(int maxNumWords, int topic) {
         //ArrayList<TreeSet<IDSorter>> topicSortedWords = new ArrayList<TreeSet<IDSorter>>();
         double[] TopicVectorsW = new double[vectorSize];
@@ -731,7 +648,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         initSpace();
         buildInitialTypeTopicCounts();
 
-        recalcTrees(true);
+        buildFTrees(true);
 
     }
 
@@ -1268,17 +1185,16 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     docSmoothingOnlyCumValues,
                     random, data,
                     typeTopicCounts, tokensPerTopic,
-                    offset, docsPerThread, trees, useCycleProposals,
+                    offset,
+                    docsPerThread, trees,
                     thread,
                     p_a,
                     p_b,
                     //queues.get(thread), 
                     barrier,
                     inActiveTopicIndex,
-                    typeTopicSimilarity,
-                    useTypeVectors,
-                    useTypeVectorsProb
-            //,betaSmoothingTree
+                    expDotProductValues,
+                    sumExpValues
             );
 
             //runnables[thread].initializeAlphaStatistics(docLengthCounts.length);
@@ -1303,7 +1219,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 beta, betaSum, gamma,
                 docSmoothingOnlyMass,
                 docSmoothingOnlyCumValues,
-                useCycleProposals, barrier,
+                barrier,
                 numTopics,
                 numModalities,
                 docLengthCounts,
@@ -1311,7 +1227,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 numTypes,
                 maxTypeCount,
                 randomUpd,
-                inActiveTopicIndex
+                inActiveTopicIndex,
+                expDotProductValues,
+                sumExpValues
         //        , betaSmoothingTree
         );
 
@@ -1381,9 +1299,15 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         topicVectors = matrix.getTopicVectors();
                         typeVectors = matrix.getWordVectors(); //TODO: Extend to all modalities
                     }
-                    CalcTopicTypeVectorSimilarities(40);
+                    //CalcTopicTypeVectorSimilarities(40);
+                    CalcSoftmaxTopicWordProbabilities();
+                    useVectorsLambda = vectorsLambda; // Incorporate vector based distributions 
+                    updater.setUseVectorsLambda(useVectorsLambda);
+                    for (int thread = 0; thread < numThreads; thread++) {
+                        runnables[thread].setUseVectorsLambda(useVectorsLambda);
+                    }
                 }
-                recalcTrees(false);
+                buildFTrees(false);
             }
 
             updater.setQueues(queues);
@@ -2703,7 +2627,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
     }
 
-    private void recalcTrees(boolean initTree) {
+    private void buildFTrees(boolean initTree) {
 
         double[] temp = new double[numTopics];
         Arrays.fill(temp, 0);
@@ -2712,8 +2636,16 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                 int[] currentTypeTopicCounts = typeTopicCounts[m][w];
                 for (int currentTopic = 0; currentTopic < numTopics; currentTopic++) {
-                    temp[currentTopic] = (!inActiveTopicIndex.isEmpty() && inActiveTopicIndex.contains(currentTopic)) ? 0
-                            : gamma[m] * alpha[m][currentTopic] * (currentTypeTopicCounts[currentTopic] + beta[m]) / (tokensPerTopic[m][currentTopic] + betaSum[m]);
+
+                    if (!inActiveTopicIndex.isEmpty() && inActiveTopicIndex.contains(currentTopic)) {
+                        temp[currentTopic] = 0;
+                    } else {
+                        double p_wt = (useVectorsLambda != 0 && m == 0)
+                                ? (useVectorsLambda * (expDotProductValues[currentTopic][w] / sumExpValues[currentTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[currentTopic] + beta[m]) / (tokensPerTopic[m][currentTopic] + betaSum[m])))
+                                : (currentTypeTopicCounts[currentTopic] + beta[m]) / (tokensPerTopic[m][currentTopic] + betaSum[m]);
+
+                        temp[currentTopic] = gamma[m] * alpha[m][currentTopic] * p_wt;
+                    }
 
                 }
                 if (initTree) {

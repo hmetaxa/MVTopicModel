@@ -18,7 +18,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
-
 /**
  * Parallel multi-view topic model runnable task using FTrees
  *
@@ -55,7 +54,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
     protected int[][][] typeTopicCounts; // indexed by  [modality][tokentype][topic]
     protected int[][] tokensPerTopic; // indexed by <topic index>
 
-    protected int[][][] typeTopicSimilarity; //<modality, token, topic>;
+    //protected int[][][] typeTopicSimilarity; //<modality, token, topic>;
     // for dirichlet estimation
     //protected int[] docLengthCounts; // histogram of document sizes
     //protected int[][] topicDocCounts; // histogram of document/topic counts, indexed by <topic index, sequence position index>
@@ -69,9 +68,9 @@ public class FastQMVWVWorkerRunnable implements Runnable {
     //protected boolean useCycleProposals = false;
     protected List<Integer> inActiveTopicIndex;
 
-    protected boolean useTypeVectors = false;
-    protected double useTypeVectorsProb = 0.6;
-    //static double[] samplingWeights = new double[101]; //for debugging
+    protected double[][] expDotProductValues;  //<topic,token>
+    protected double[] sumExpValues; // Partition function values per topic     
+    protected double useVectorsLambda = 0; //the weight of the p(w|t) probability based on word / topic emdeddings (it should be 0 either when we don't use vectors or we haven;t  calculated related softmax based probabilities (i.e., during burn in period)
 
     public FastQMVWVWorkerRunnable(
             int numTopics,
@@ -88,17 +87,18 @@ public class FastQMVWVWorkerRunnable implements Runnable {
             int[][][] typeTopicCounts,
             int[][] tokensPerTopic,
             int startDoc,
-            int numDocs, FTree[][] trees,
-            boolean useCycleProposals,
+            int numDocs,
+            FTree[][] trees,
+            //boolean useCycleProposals,
             int threadId,
             double[][] p_a, // a for beta prior for modalities correlation
             double[][] p_b, // b for beta prir for modalities correlation
             //            ConcurrentLinkedQueue<FastQDelta> queue, 
             CyclicBarrier cyclicBarrier,
             List<Integer> inActiveTopicIndex,
-            int[][][] typeTopicSimilarity,
-            boolean useTypeVectors,
-            double useTypeVectorsProb
+            double[][] expDotProductValues, //<topic,token>
+            double[] sumExpValues // Partition function values per topic     
+
     //, FTree betaSmoothingTree
     ) {
 
@@ -125,22 +125,25 @@ public class FastQMVWVWorkerRunnable implements Runnable {
         this.startDoc = startDoc;
         this.numDocs = numDocs;
         //this.useCycleProposals = useCycleProposals;
-        this.typeTopicSimilarity = typeTopicSimilarity;
+        //this.typeTopicSimilarity = typeTopicSimilarity;
 
         this.docSmoothingOnlyCumValues = docSmoothingOnlyCumValues;
         this.docSmoothingOnlyMass = docSmoothingOnlyMass;
         this.p_a = p_a;
         this.p_b = p_b;
         this.inActiveTopicIndex = inActiveTopicIndex;
-        this.useTypeVectors = useTypeVectors;
-        this.useTypeVectorsProb = useTypeVectorsProb;
-
+        this.expDotProductValues = expDotProductValues;  //<topic,token>
+        this.sumExpValues = sumExpValues; // Partition function values per topic     
         //System.err.println("WorkerRunnable Thread: " + numTopics + " topics, " + topicBits + " topic bits, " + 
         //				   Integer.toBinaryString(topicMask) + " topic mask");
     }
 
     public void setQueue(Queue<FastQDelta> queue) {
         this.queue = queue;
+    }
+    
+    public void setUseVectorsLambda(double useVectorsLambda) {
+        this.useVectorsLambda = useVectorsLambda;
     }
 
 //    public int[][] getTokensPerTopic() {
@@ -286,9 +289,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
     protected void sampleTopicsForOneDoc(int docCnt) {
 
         try {
-            
-            
-                    
+
             MixTopicModelTopicAssignment doc = data.get(docCnt);
 
             //double[][] totalMassPerModalityAndTopic = new double[numModalities][];
@@ -358,7 +359,6 @@ public class FastQMVWVWorkerRunnable implements Runnable {
 //                    p[j][m] = (double)docLength[j] / (double)totalLength;  //too sparse modality --> ignore its doc /topic distribution
 //                }
 //            }
-
             // Build an array that densely lists the topics that
             //  have non-zero counts.
             int denseIndex = 0;
@@ -461,7 +461,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
 
                     //If WordVect
                     newTopic = -1;
-                  /*  if (useTypeVectors) {
+                    /*  if (useTypeVectors) {
                         double nextUniform = ThreadLocalRandom.current().nextDouble();
                         if (nextUniform > useTypeVectorsProb) { //TODO: Use MH instead (or additionaly)
                             double sample = ThreadLocalRandom.current().nextDouble() * typeTopicSimilarity[type][oldTopic][numTopics-1];
@@ -487,7 +487,12 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                         for (denseIndex = 0; denseIndex < nonZeroTopics; denseIndex++) {
                             int topic = localTopicIndex[denseIndex];
                             int n = localTopicCounts[m][topic];
-                            topicDocWordMass += (p[m][m] * n + totalMassOtherModalities[topic]) * (currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m]);
+                            double p_wt = (useVectorsLambda != 0 && m == 0)
+                                    ? (useVectorsLambda * (expDotProductValues[topic][type] / sumExpValues[topic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m])))
+                                    : (currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m]);
+
+                            
+                            topicDocWordMass += (p[m][m] * n + totalMassOtherModalities[topic]) * p_wt; //(currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m]);
                             //topicDocWordMass +=  n * trees[type].getComponent(topic);
                             topicDocWordMasses[denseIndex] = topicDocWordMass;
 

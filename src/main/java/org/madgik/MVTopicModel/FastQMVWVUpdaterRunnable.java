@@ -20,8 +20,8 @@ import org.knowceans.util.Samplers;
 import org.knowceans.util.Vectors;
 
 /**
- * Parallel multi-view topic model updater task using FTrees 
- * 
+ * Parallel multi-view topic model updater task using FTrees
+ *
  * Update thread
  *
  * @author Omiros Metaxas
@@ -54,19 +54,19 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
     protected double[] docSmoothingOnlyMass;
     protected double[][] docSmoothingOnlyCumValues;
-    
-    //protected short[][][] typeTopicSimilarity; //<modality, token, topic>;
 
     //protected FTree betaSmoothingTree;
     private final CyclicBarrier cyclicBarrier;
-    boolean useCycleProposals = false;
     public static final double DEFAULT_BETA = 0.01;
     boolean optimizeParams = false;
 
     // Optimize gamma[0] hyper params
     protected List<Integer> inActiveTopicIndex; //inactive topic index for all modalities
     private NumberFormat formatter;
-    
+
+    protected double[][] expDotProductValues;  //<topic,token>
+    protected double[] sumExpValues; // Partition function values per topic     
+    protected double useVectorsLambda = 0; //the weight of the p(w|t) probability based on word / topic emdeddings (it should be 0 either when we don't use vectors or we haven;t  calculated related softmax based probabilities (i.e., during burn in period)
 
     public FastQMVWVUpdaterRunnable(
             int[][][] typeTopicCounts,
@@ -80,7 +80,6 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
             double[] gamma,
             double[] docSmoothingOnlyMass,
             double[][] docSmoothingOnlyCumValues,
-            boolean useCycleProposals,
             CyclicBarrier cyclicBarrier,
             int numTopics,
             byte numModalities,
@@ -89,8 +88,10 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
             int[] numTypes,
             int[] maxTypeCount,
             Randoms random,
-            List<Integer> inActiveTopicIndex
-            //short[][][] typeTopicSimilarity
+            List<Integer> inActiveTopicIndex,
+            double[][] expDotProductValues, //<topic,token>
+            double[] sumExpValues // Partition function values per topic     
+    //short[][][] typeTopicSimilarity
     //        , FTree betaSmoothingTree
     ) {
 
@@ -104,7 +105,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
         this.typeTopicCounts = typeTopicCounts;
         this.tokensPerTopic = tokensPerTopic;
         this.trees = trees;
-        this.useCycleProposals = useCycleProposals;
+
         this.numTopics = numTopics;
         this.numModalities = numModalities;
         this.docLengthCounts = docLengthCounts;
@@ -124,6 +125,8 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
         this.samp = new RandomSamplers(ThreadLocalRandom.current());
 
         tablesCnt = new double[numModalities];
+        this.expDotProductValues = expDotProductValues;  //<topic,token>
+        this.sumExpValues = sumExpValues; // Partition function values per topic     
 
         //this.betaSmoothingTree = betaSmoothingTree;
         //finishedSamplingTreads = new boolean
@@ -133,6 +136,10 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
     public void setOptimizeParams(boolean optimizeParams) {
         this.optimizeParams = optimizeParams;
+    }
+
+    public void setUseVectorsLambda(double useVectorsLambda) {
+        this.useVectorsLambda = useVectorsLambda;
     }
 
     public void setQueues(List<Queue<FastQDelta>> queues) {
@@ -161,14 +168,13 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                 FastQDelta delta;
                 int[] currentTypeTopicCounts;
                 for (int x = 0; x < queues.size(); x++) {
-                   //logger.info("Updater thread: processing queue["+x+"]");
+                    //logger.info("Updater thread: processing queue["+x+"]");
                     while ((delta = queues.get(x).poll()) != null) {
 
-                        
                         if (delta.Modality == -1 && delta.NewTopic == -1 && delta.OldTopic == -1 && delta.Type == -1) { // thread x has finished
                             finishedSamplingTreads.add(x);
                             isFinished = finishedSamplingTreads.size() == queues.size();
-                            
+
                             //logger.info("Updater thread: worker["+x+"] has finished");
                             continue;
                         }
@@ -218,10 +224,19 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 //                            //betaSmoothingTree.update(delta.OldTopic, (beta[0] / (tokensPerTopic[delta.OldTopic] + betaSum[0])));
 //                            //betaSmoothingTree.update(delta.NewTopic, ( beta[0] / (tokensPerTopic[delta.NewTopic] + betaSum[0])));
 //                        } else {
-                            if (delta.OldTopic != FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC) {
-                                trees[delta.Modality][delta.Type].update(delta.OldTopic, ( gamma[delta.Modality] * alpha[delta.Modality][delta.OldTopic] * (currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.OldTopic] + betaSum[delta.Modality])));
-                            }
-                            trees[delta.Modality][delta.Type].update(delta.NewTopic, ( gamma[delta.Modality] * alpha[delta.Modality][delta.NewTopic] * (currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.NewTopic] + betaSum[delta.Modality])));
+                        if (delta.OldTopic != FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC) {
+
+                            double p_wt = (useVectorsLambda != 0 && delta.Modality == 0)
+                                    ? (useVectorsLambda * (expDotProductValues[delta.OldTopic][delta.Type] / sumExpValues[delta.OldTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.OldTopic] + betaSum[delta.Modality])))
+                                    : (currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.OldTopic] + betaSum[delta.Modality]);
+
+                            trees[delta.Modality][delta.Type].update(delta.OldTopic, (gamma[delta.Modality] * alpha[delta.Modality][delta.OldTopic] * p_wt));
+                        }
+                        double p_wt_newTopic = (useVectorsLambda != 0 && delta.Modality == 0)
+                                    ? (useVectorsLambda * (expDotProductValues[delta.NewTopic][delta.Type] / sumExpValues[delta.NewTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.NewTopic] + betaSum[delta.Modality])))
+                                    : (currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.NewTopic] + betaSum[delta.Modality]);
+
+                        trees[delta.Modality][delta.Type].update(delta.NewTopic, (gamma[delta.Modality] * alpha[delta.Modality][delta.NewTopic] * p_wt_newTopic ));
                         //}
 
                         if (inActiveTopicIndex.contains(delta.NewTopic)) //new topic
