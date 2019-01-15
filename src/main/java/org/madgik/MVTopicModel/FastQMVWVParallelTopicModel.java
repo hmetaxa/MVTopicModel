@@ -145,17 +145,18 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     public double[][] typeVectors; // Vector representations for tokens -txt only- <token, vector>
     public double[][] topicVectors;// Vector representations for topics < topic, vector>
 
-    public int vectorSize = 200; // Number of vector dimensions per modality
+    public int vectorSize = 300; // Number of vector dimensions per modality
     //public int[][][] typeTopicSimilarity; //<token, topic, topic>; * 10.000 (similarity: [0,1] * 10000)
 
     public boolean useTypeVectors;
     public boolean trainTypeVectors;
     public double useVectorsLambda = 0;
-    public double vectorsLambda = 0.6;
+    public double vectorsLambda = 0.3;
     public double[][] expDotProductValues;  //<topic,token>
     public double[] sumExpValues; // Partition function values per topic 
+    TopicWordEmbeddings matrix;
 
-    public String SQLLiteDB;
+    public String SQLConnectionString;
 
     // The number of times each type appears in the corpus
     int[][] typeTotals;
@@ -172,9 +173,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         return ret;
     }
 
-    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta, boolean useCycleProposals, String SQLLiteDB, boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors) {
+    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta, boolean useCycleProposals, String SQLConnectionString, boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors) {
 
-        this.SQLLiteDB = SQLLiteDB;
+        this.SQLConnectionString = SQLConnectionString;
         this.useTypeVectors = useTypeVectors;
         this.vectorsLambda = vectorsLambda;
         this.trainTypeVectors = trainTypeVectors;
@@ -319,132 +320,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     public void setSaveSerializedModel(int interval, String filename) {
         this.saveModelInterval = interval;
         this.modelFilename = filename;
-    }
-
-    public void readWordVectorsFile(String pathToWordVectorsFile, Alphabet[] alphabet) //word vectors for text modality
-            throws Exception {
-        System.out.println("Reading word vectors from word-vectors file " + pathToWordVectorsFile
-                + "...");
-
-        BufferedReader br = null;
-        try {
-            br = new BufferedReader(new FileReader(pathToWordVectorsFile));
-            String[] elements = br.readLine().trim().split("\\s+");
-            this.vectorSize = elements.length - 1;
-            this.topicVectors = new double[numTopics][vectorSize];// Vector representations for topics <topic, vector>
-
-            //this.typeVectors = new double[][]; // Vector representations for tokens per modality <modality, token, vector>
-            this.typeVectors = new double[alphabet[0].size()][vectorSize];
-            expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,word>
-            sumExpValues = new double[numTopics]; // Partition function values per topic 
-
-            String word = elements[0];
-            //TODO: I should only take into account words that have wordvectors...
-            int wordId = alphabet[0].lookupIndex(word, false);
-            if (alphabet[0].lookupIndex(word) != -1) {
-                for (int j = 0; j < vectorSize; j++) {
-                    typeVectors[wordId][j] = new Double(elements[j + 1]);
-                }
-            }
-            for (String line; (line = br.readLine()) != null;) {
-                elements = line.trim().split("\\s+");
-                word = elements[0];
-                wordId = alphabet[0].lookupIndex(word, false);
-                if (alphabet[0].lookupIndex(word) != -1) {
-
-                    for (int j = 0; j < vectorSize; j++) {
-                        typeVectors[wordId][j] = new Double(elements[j + 1]);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        for (int i = 0; i < alphabet[0].size(); i++) {
-            for (int j = 0; j < numTopics; j++) {
-                //Arrays.fill(this.typeTopicSimilarity[i][j], (short) 10000);
-                if (MatrixOps.absNorm(typeVectors[i]) == 0.0) {
-                    System.out.println("The word \"" + alphabet[0].lookupObject(i)
-                            + "\" doesn't have a corresponding vector!!!");
-                    throw new Exception();
-                }
-            }
-        }
-    }
-
-    public void readWordVectorsDB(String SQLLitedb, int vectorSize) //word vectors for text modality
-    {
-
-        if (useTypeVectors) {
-            this.vectorSize = vectorSize;
-
-            expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,word>
-            sumExpValues = new double[numTopics]; // Partition function values per topic 
-
-            if (trainTypeVectors) {
-
-            } else {
-                this.topicVectors = new double[numTopics][vectorSize];// Vector representations for topics <topic, vector>
-                this.typeVectors = new double[alphabet[0].size()][vectorSize];
-
-                Connection connection = null;
-                try {
-                    connection = DriverManager.getConnection(SQLLitedb);
-                    String sql = "";
-
-                    sql = "select word, ColumnId, weight, modality from WordVector order by modality, word, columnId";
-
-                    Statement statement = connection.createStatement();
-                    ResultSet rs = statement.executeQuery(sql);
-
-                    while (rs.next()) {
-
-                        int m = rs.getInt("modality");
-                        int w = m == 0 ? alphabet[m].lookupIndex(rs.getString("word"), false) : Integer.parseInt(rs.getString("word"));
-                        int c = rs.getInt("ColumnId");
-                        double weight = rs.getDouble("weight");
-                        if (w != -1) {
-                            if (m == -1) {
-                                this.topicVectors[w][c] = weight;
-
-                            } else if (m == 0) {
-                                this.typeVectors[w][c] = weight;
-                            }
-
-                        }
-
-                    }
-
-                } catch (SQLException e) {
-                    // if the error message is "out of memory", 
-                    // it probably means no database file is found
-                    System.err.println(e.getMessage());
-                } finally {
-                    try {
-                        if (connection != null) {
-                            connection.close();
-                        }
-                    } catch (SQLException e) {
-                        // connection close failed.
-                        System.err.println(e);
-                    }
-                }
-
-                for (int i = 0; i < alphabet[0].size(); i++) {
-                    for (int j = 0; j < numTopics; j++) {
-                        //Arrays.fill(this.typeTopicSimilarity[i][j],  0);
-                        if (MatrixOps.absNorm(typeVectors[i]) == 0.0) {
-                            System.out.println("The word \"" + alphabet[0].lookupObject(i)
-                                    + "\" doesn't have a corresponding vector!!!");
-                            //       throw new Exception();
-                        }
-                    }
-
-                }
-
-            }
-        }
     }
 
     private void CalcSoftmaxTopicWordProbabilities() {
@@ -641,8 +516,15 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             }
         }
 
-        if (useTypeVectors && !trainTypeVectors) {
-            readWordVectorsDB(SQLLiteDB, vectorSize);
+        if (trainTypeVectors) {
+            this.vectorSize = vectorSize;
+            expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,word>
+            sumExpValues = new double[numTopics]; // Partition function values per topic 
+
+            int windowSizeOption = 5;
+            matrix = new TopicWordEmbeddings(alphabet[0], vectorSize, 10, windowSizeOption, numTopics, useTypeVectors);
+
+            //readWordVectorsDB(SQLConnectionString, vectorSize);
         }
         initializeHistograms();
         initSpace();
@@ -1286,19 +1168,17 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 optimizeDP();
                 optimizeGamma();
                 optimizeBeta();
-                if (useTypeVectors) {
-                    if (trainTypeVectors) {
 
-                        int windowSizeOption = 5;
-                        int numSamples = 5;
-                        TopicWordEmbeddings matrix = new TopicWordEmbeddings(alphabet[0], vectorSize, 10, windowSizeOption, numTopics);
-                        matrix.queryWord = "mining";
-                        matrix.countWords(data, 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
-                        matrix.train(data, numThreads, numSamples, 5);//numOfIterations
+                if (trainTypeVectors) {
 
-                        topicVectors = matrix.getTopicVectors();
-                        typeVectors = matrix.getWordVectors(); //TODO: Extend to all modalities
-                    }
+                    int numSamples = 5;
+                    matrix.queryWord = "mining";
+                    matrix.countWords(data, 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
+                    matrix.train(data, numThreads, numSamples, 2);//numOfIterations
+
+                    topicVectors = matrix.getTopicVectors();
+                    typeVectors = matrix.getWordVectors(); //TODO: Extend to all modalities
+
                     //CalcTopicTypeVectorSimilarities(40);
                     CalcSoftmaxTopicWordProbabilities();
                     useVectorsLambda = vectorsLambda; // Incorporate vector based distributions 
@@ -1460,14 +1340,14 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         out.close();
     }
 
-    public void saveExperiment(String SQLLiteDB, String experimentId, String experimentDescription) {
+    public void saveExperiment(String SQLConnectionString, String experimentId, String experimentDescription) {
 
         Connection connection = null;
         Statement statement = null;
         try {
             // create a database connection
-            if (!SQLLiteDB.isEmpty()) {
-                connection = DriverManager.getConnection(SQLLiteDB);
+            if (!SQLConnectionString.isEmpty()) {
+                connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
                 //statement.executeUpdate("drop table if exists TopicAnalysis");
                 //statement.executeUpdate("create table if not exists Experiment (ExperimentId nvarchar(50), Description nvarchar(200), Metadata nvarchar(500), InitialSimilarity Double, PhraseBoost Integer) ");
@@ -1550,14 +1430,63 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    public void saveTopics(String SQLLiteDB, String experimentId, String batchId) {
+    public void saveResults(String SQLConnectionString, String experimentId, String batchId) {
+        saveTopics(SQLConnectionString, experimentId, batchId);
+        logger.info("Topics Saved");
+
+        PrintWriter outState = null;// new PrintWriter(new FileWriter((new File(outputDocTopicsFile))));
+
+        double docTopicsThreshold = 0.03;
+        int docTopicsMax = -1;
+        printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLConnectionString, experimentId, batchId);
+        logger.info("Topics per Doc Saved");
+        saveExperiment(SQLConnectionString, experimentId, "Multi View Topic Modeling Analysis");
+        logger.info("Experiment Details Saved");
+
+        if (trainTypeVectors) {
+            matrix.save(SQLConnectionString, "word", experimentId);
+            logger.info("Vectors Saved");
+        }
+        Connection connection = null;
+        try {
+
+            String insertTopicDescriptionSql = "INSERT into TopicDescription (Title, Category, TopicId , VisibilityIndex, ExperimentId )\n"
+                    + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
+                    + "from  TopicDescriptionView\n"
+                    + " where experimentID = '" + experimentId + "' \n"
+                    + " GROUP BY TopicID";
+
+            connection = DriverManager.getConnection(SQLConnectionString);
+            Statement statement = connection.createStatement();
+            statement.executeUpdate(insertTopicDescriptionSql);
+            //ResultSet rs = statement.executeQuery(sql);
+
+        } catch (SQLException e) {
+            // if the error message is "out of memory", 
+            // it probably means no database file is found
+            logger.error(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                logger.error(e);
+            }
+        }
+        logger.info("Default topic descriptions inserted");
+
+    }
+
+    public void saveTopics(String SQLConnectionString, String experimentId, String batchId) {
 
         Connection connection = null;
         Statement statement = null;
         try {
             // create a database connection
-            if (!SQLLiteDB.isEmpty()) {
-                connection = DriverManager.getConnection(SQLLiteDB);
+            if (!SQLConnectionString.isEmpty()) {
+                connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
 
                 //statement.executeUpdate("create table if not exists TopicDetails (TopicId integer, ItemType integer,  Weight double, TotalTokens int, BatchId TEXT,ExperimentId nvarchar(50)) ");
@@ -2787,7 +2716,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //        }
     }
 
-    public void printDocumentTopics(PrintWriter out, double threshold, int max, String SQLLiteDB, String experimentId, String batchId) {
+    public void printDocumentTopics(PrintWriter out, double threshold, int max, String SQLConnectionString, String experimentId, String batchId) {
         if (out != null) {
             out.print("#doc name topic proportion ...\n");
         }
@@ -2814,8 +2743,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         Statement statement = null;
         try {
             // create a database connection
-            if (!SQLLiteDB.isEmpty()) {
-                connection = DriverManager.getConnection(SQLLiteDB);
+            if (!SQLConnectionString.isEmpty()) {
+                connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
                 // statement.executeUpdate("drop table if exists PubTopic");
                 //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
@@ -2889,7 +2818,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                             out.println(builder);
                         }
 
-                        if (!SQLLiteDB.isEmpty()) {
+                        if (!SQLConnectionString.isEmpty()) {
                             //  sql += String.format(Locale.ENGLISH, "insert into PubTopic values('%s',%d,%.4f,'%s' );", docId, sortedTopics[i].getID(), sortedTopics[i].getWeight(), experimentId);
                             bulkInsert.setString(1, docId);
                             bulkInsert.setInt(2, sortedTopics[i].getID());
@@ -2907,7 +2836,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //                        sql = "";
 //                    }
                 }
-                if (!SQLLiteDB.isEmpty()) {
+                if (!SQLConnectionString.isEmpty()) {
                     connection.commit();
                 }
 //                if (!sql.isEmpty()) {
@@ -2954,13 +2883,13 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    public void CreateTables(String SQLLiteDB, String experimentId) {
+    public void CreateTables(String SQLConnectionString, String experimentId) {
         Connection connection = null;
         Statement statement = null;
         try {
             // create a database connection
-            if (!SQLLiteDB.isEmpty()) {
-                connection = DriverManager.getConnection(SQLLiteDB);
+            if (!SQLConnectionString.isEmpty()) {
+                connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
                 // statement.executeUpdate("drop table if exists PubTopic");
                 //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");

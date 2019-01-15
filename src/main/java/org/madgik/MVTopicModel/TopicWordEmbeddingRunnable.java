@@ -2,6 +2,13 @@ package org.madgik.MVTopicModel;
 
 import java.util.*;
 import cc.mallet.types.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 
 public class TopicWordEmbeddingRunnable implements Runnable {
@@ -31,6 +38,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
 
     public long wordsSoFar = 0;
     private int minDocumentLength;
+    
 
     public TopicWordEmbeddingRunnable(TopicWordEmbeddings model, ArrayList<MixTopicModelTopicAssignment> data, int numSamples, int numThreads, int threadID, int numWords, int numTopics) {
         this.model = model;
@@ -42,6 +50,8 @@ public class TopicWordEmbeddingRunnable implements Runnable {
 
         this.numThreads = numThreads;
         this.threadID = threadID;
+        
+
         random = new Random();
 
         numColumns = model.numColumns;
@@ -68,6 +78,7 @@ public class TopicWordEmbeddingRunnable implements Runnable {
         return result;
     }
 
+  
     private void gradientLearn(int inputType, int outputType, double learningRate, boolean learnContext) {
 
         int inputTypeOffset, outputTypeOffset, sampledTypeOffset, sampledType;
@@ -192,8 +203,8 @@ public class TopicWordEmbeddingRunnable implements Runnable {
 
         while (shouldRun) {
             MixTopicModelTopicAssignment doc = data.get(agenda[docID]);
-            //Instance instance = data.get(agenda[docID]).Assignments[0].instance;
 
+            //Instance instance = data.get(agenda[docID]).Assignments[0].instance;
             docID++;
 
             if (docID == numDocs) {
@@ -212,69 +223,71 @@ public class TopicWordEmbeddingRunnable implements Runnable {
                 //System.out.format("%f\t%f\t%d\t%d\t%d\t%f\t%f\n", learningRate, 100.0 * wordsSoFar / model.totalWords, wordsSoFar, wordsConsidered, updates, (double) updates / wordsConsidered, gradientSum / updates);
             }
 
-            FeatureSequence tokens = (FeatureSequence) doc.Assignments[0].instance.getData();
+            if (doc.Assignments[0] != null) {
+                FeatureSequence tokens = (FeatureSequence) doc.Assignments[0].instance.getData();
 
-            int[] oneDocTopics = null;
-            if (numTopics > 0) {
-
-                oneDocTopics = doc.Assignments[0].topicSequence.getFeatures();
-
-            }
-
-            int originalLength = tokens.getLength();
-            int length = 0;
-
-            // Subsample the document, dropping frequent words frequently.
-            for (int inputPosition = 0; inputPosition < originalLength; inputPosition++) {
-                inputType = tokens.getIndexAtPosition(inputPosition);
-
-                wordsSoFar++;
-
-                if (random.nextDouble() < model.retentionProbability[inputType]) {
-                    tokenBuffer[length] = inputType;
-                    if (numTopics > 0) {
-                        topicsBuffer[length] = oneDocTopics[inputPosition];
-                    }
-                    length++;
-                    wordsSampled++;
-                }
-            }
-
-            // Skip short documents
-            assert minDocumentLength > 0;
-            if (length < minDocumentLength) {
-                continue;
-            }
-
-            for (int inputPosition = 0; inputPosition < length; inputPosition++) {
-
-                wordsConsidered++;
-                inputType = tokenBuffer[inputPosition];
-                int inputtopic = 0;
+                int[] oneDocTopics = null;
                 if (numTopics > 0) {
-                    inputtopic = topicsBuffer[inputPosition];
-                    gradientLearn(inputType, numWords + inputtopic, learningRate, true); //word context: word should also predict its topic 
-                    gradientLearn(inputType, numWords + inputtopic, learningRate, false); //word content: word should also predict the content of its topic --> tokens from different modalities should end up with similar content vectors
-                    
-                    gradientLearn(numWords + inputtopic, inputType, learningRate, false); //topic content: topic should also predict word
+
+                    oneDocTopics = doc.Assignments[0].topicSequence.getFeatures();
+
                 }
 
-                subWindow = random.nextInt(model.windowSize) + 1;
-                start = Math.max(0, inputPosition - subWindow);
-                end = Math.min(length - 1, inputPosition + subWindow);
-                for (int outputPosition = start; outputPosition <= end; outputPosition++) {
-                    if (inputPosition == outputPosition) {
-                        continue;
-                    }
-                    outputType = tokenBuffer[outputPosition];
+                int originalLength = tokens.getLength();
+                int length = 0;
 
-                    //if (inputType == outputType) { continue; }
-                    gradientLearn(inputType, outputType, learningRate, false); //word content: word predict other words
+                // Subsample the document, dropping frequent words frequently.
+                for (int inputPosition = 0; inputPosition < originalLength; inputPosition++) {
+                    inputType = tokens.getIndexAtPosition(inputPosition);
+
+                    wordsSoFar++;
+
+                    if (random.nextDouble() < model.retentionProbability[inputType]) {
+                        tokenBuffer[length] = inputType;
+                        if (numTopics > 0) {
+                            topicsBuffer[length] = oneDocTopics[inputPosition];
+                        }
+                        length++;
+                        wordsSampled++;
+                    }
+                }
+
+                // Skip short documents
+                assert minDocumentLength > 0;
+                if (length < minDocumentLength) {
+                    continue;
+                }
+
+                for (int inputPosition = 0; inputPosition < length; inputPosition++) {
+
+                    wordsConsidered++;
+                    inputType = tokenBuffer[inputPosition];
+                    int inputtopic = 0;
                     if (numTopics > 0) {
-                        int outputtopic = topicsBuffer[outputPosition];
-                        gradientLearn(numWords + inputtopic, numWords + outputtopic, learningRate, true); //topic context: topic predic other topics
+                        inputtopic = topicsBuffer[inputPosition];
+                        gradientLearn(inputType, numWords + inputtopic, learningRate, true); //word context: word should also predict its topic 
+                        gradientLearn(inputType, numWords + inputtopic, learningRate, false); //word content: word should also predict the content of its topic --> tokens from different modalities should end up with similar content vectors
+
+                        gradientLearn(numWords + inputtopic, inputType, learningRate, false); //topic content: topic should also predict word
                     }
 
+                    subWindow = random.nextInt(model.windowSize) + 1;
+                    start = Math.max(0, inputPosition - subWindow);
+                    end = Math.min(length - 1, inputPosition + subWindow);
+                    for (int outputPosition = start; outputPosition <= end; outputPosition++) {
+                        if (inputPosition == outputPosition) {
+                            continue;
+                        }
+                        outputType = tokenBuffer[outputPosition];
+
+                        //if (inputType == outputType) { continue; }
+                        gradientLearn(inputType, outputType, learningRate, false); //word content: word predict other words
+                        if (numTopics > 0) {
+                            int outputtopic = topicsBuffer[outputPosition];
+                            gradientLearn(numWords + inputtopic, numWords + outputtopic, learningRate, true); //topic context: topic predic other topics
+                        }
+
+                    }
                 }
             }
         }

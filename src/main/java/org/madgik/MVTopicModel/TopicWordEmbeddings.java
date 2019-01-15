@@ -89,6 +89,7 @@ public class TopicWordEmbeddings {
     IDSorter[] sortedWords = null;
 
     int orderingStrategy = LINEAR_ORDERING;
+    private boolean useTypeVectors = false;  //TODO: initialize from existing word vectors 
 
     public int getMinDocumentLength() {
         return minDocumentLength;
@@ -122,7 +123,7 @@ public class TopicWordEmbeddings {
     public TopicWordEmbeddings() {
     }
 
-    public TopicWordEmbeddings(Alphabet a, int numColumns, int numContextColumns, int windowSize, int numOfTopics) {
+    public TopicWordEmbeddings(Alphabet a, int numColumns, int numContextColumns, int windowSize, int numOfTopics, boolean useTypeVectors) {
         vocabulary = a;
 
         numWords = vocabulary.size();
@@ -133,7 +134,7 @@ public class TopicWordEmbeddings {
 
         this.numColumns = numColumns;
         this.numContextColumns = numTopics == 0 ? 0 : numContextColumns;
-
+        this.useTypeVectors = useTypeVectors;
         this.stride = numColumns;
 
         weights = new double[numVectors * stride];
@@ -162,6 +163,129 @@ public class TopicWordEmbeddings {
 
     }
 
+    /*  public void readWordVectorsFile(String pathToWordVectorsFile, Alphabet[] alphabet) //word vectors for text modality
+            throws Exception {
+        System.out.println("Reading word vectors from word-vectors file " + pathToWordVectorsFile
+                + "...");
+
+        BufferedReader br = null;
+        try {
+            br = new BufferedReader(new FileReader(pathToWordVectorsFile));
+            String[] elements = br.readLine().trim().split("\\s+");
+            this.vectorSize = elements.length - 1;
+            this.topicVectors = new double[numTopics][vectorSize];// Vector representations for topics <topic, vector>
+
+            //this.typeVectors = new double[][]; // Vector representations for tokens per modality <modality, token, vector>
+            this.typeVectors = new double[alphabet[0].size()][vectorSize];
+            expDotProductValues = new double[numTopics][alphabet[0].size()];  //<topic,word>
+            sumExpValues = new double[numTopics]; // Partition function values per topic 
+
+            String word = elements[0];
+            //TODO: I should only take into account words that have wordvectors...
+            int wordId = alphabet[0].lookupIndex(word, false);
+            if (alphabet[0].lookupIndex(word) != -1) {
+                for (int j = 0; j < vectorSize; j++) {
+                    typeVectors[wordId][j] = new Double(elements[j + 1]);
+                }
+            }
+            for (String line; (line = br.readLine()) != null;) {
+                elements = line.trim().split("\\s+");
+                word = elements[0];
+                wordId = alphabet[0].lookupIndex(word, false);
+                if (alphabet[0].lookupIndex(word) != -1) {
+
+                    for (int j = 0; j < vectorSize; j++) {
+                        typeVectors[wordId][j] = new Double(elements[j + 1]);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        for (int i = 0; i < alphabet[0].size(); i++) {
+            for (int j = 0; j < numTopics; j++) {
+                //Arrays.fill(this.typeTopicSimilarity[i][j], (short) 10000);
+                if (MatrixOps.absNorm(typeVectors[i]) == 0.0) {
+                    System.out.println("The word \"" + alphabet[0].lookupObject(i)
+                            + "\" doesn't have a corresponding vector!!!");
+                    throw new Exception();
+                }
+            }
+        }
+    }
+
+    public void readWordVectorsDB(String SQLConnectionString, int vectorSize) //word vectors for text modality
+    {
+
+        if (useTypeVectors) {
+
+            if (trainTypeVectors) {
+
+            } else {
+                this.topicVectors = new double[numTopics][vectorSize];// Vector representations for topics <topic, vector>
+                this.typeVectors = new double[alphabet[0].size()][vectorSize];
+
+                Connection connection = null;
+                try {
+                    connection = DriverManager.getConnection(SQLConnectionString);
+                    String sql = "";
+
+                    sql = "select word, ColumnId, weight, modality from WordVector order by modality, word, columnId";
+
+                    Statement statement = connection.createStatement();
+                    ResultSet rs = statement.executeQuery(sql);
+
+                    while (rs.next()) {
+
+                        int m = rs.getInt("modality");
+                        int w = m == 0 ? alphabet[m].lookupIndex(rs.getString("word"), false) : Integer.parseInt(rs.getString("word"));
+                        int c = rs.getInt("ColumnId");
+                        double weight = rs.getDouble("weight");
+                        if (w != -1) {
+                            if (m == -1) {
+                                this.topicVectors[w][c] = weight;
+
+                            } else if (m == 0) {
+                                this.typeVectors[w][c] = weight;
+                            }
+
+                        }
+
+                    }
+
+                } catch (SQLException e) {
+                    // if the error message is "out of memory", 
+                    // it probably means no database file is found
+                    System.err.println(e.getMessage());
+                } finally {
+                    try {
+                        if (connection != null) {
+                            connection.close();
+                        }
+                    } catch (SQLException e) {
+                        // connection close failed.
+                        System.err.println(e);
+                    }
+                }
+
+                for (int i = 0; i < alphabet[0].size(); i++) {
+                    for (int j = 0; j < numTopics; j++) {
+                        //Arrays.fill(this.typeTopicSimilarity[i][j],  0);
+                        if (MatrixOps.absNorm(typeVectors[i]) == 0.0) {
+                            System.out.println("The word \"" + alphabet[0].lookupObject(i)
+                                    + "\" doesn't have a corresponding vector!!!");
+                            //       throw new Exception();
+                        }
+                    }
+
+                }
+
+            }
+        }
+    }
+*/
+    
     public void initializeSortables() {
         sortedWords = new IDSorter[numWords];
         for (int word = 0; word < numWords; word++) {
@@ -220,28 +344,30 @@ public class TopicWordEmbeddings {
 
         for (int docID = 0; docID < numDocuments; docID++) {
 
-            Instance instance = data.get(docID).Assignments[0].instance;
-            FeatureSequence tokens = (FeatureSequence) instance.getData();
-            int length = tokens.getLength();
+            if (data.get(docID).Assignments[0] != null) {
+                Instance instance = data.get(docID).Assignments[0].instance;
+                FeatureSequence tokens = (FeatureSequence) instance.getData();
+                int length = tokens.getLength();
 
-            /*
+                /*
             int[] oneDocTopics = null;
             if (numTopics > 0) {
                 LabelSequence topicSequence = (LabelSequence) data.get(docID).Assignments[0].topicSequence;
                 oneDocTopics = topicSequence.getFeatures();
 
             }
-             */
-            for (int position = 0; position < length; position++) {
-                int type = tokens.getIndexAtPosition(position);
-                wordCounts[type]++;
-                /*if (numTopics > 0) {
+                 */
+                for (int position = 0; position < length; position++) {
+                    int type = tokens.getIndexAtPosition(position);
+                    wordCounts[type]++;
+                    /*if (numTopics > 0) {
                     int topic = oneDocTopics[position];
                     wordCounts[numWords + topic]++;
                 }*/
-            }
+                }
 
-            totalWords += length;
+                totalWords += length;
+            }
         }
 
         for (int word = 0; word < numWords; word++) {
@@ -314,7 +440,7 @@ public class TopicWordEmbeddings {
         while (!finished) {
 
             try {
-                Thread.sleep(5000);
+                Thread.sleep(15000);
             } catch (InterruptedException e) {
 
             }
@@ -344,11 +470,14 @@ public class TopicWordEmbeddings {
                 for (int thread = 0; thread < numThreads; thread++) {
                     runnables[thread].shouldRun = false;
                 }
-            }
-
-            if (queryWord != null && vocabulary.contains(queryWord)) {
+                if (queryWord != null && vocabulary.contains(queryWord)) {
                 findClosest(copy(queryWord));
             }
+            }
+
+            //if (queryWord != null && vocabulary.contains(queryWord)) {
+              //  findClosest(copy(queryWord));
+            //}
         }
         executor.shutdownNow();
     }
@@ -470,20 +599,20 @@ public class TopicWordEmbeddings {
         }
     }
 
-    public void write(String SQLLiteDB, int modality) {
+    public void save(String SQLConnectionString, String entityType, String experimentId) {
         Connection connection = null;
         Statement statement = null;
         try {
             // create a database connection
-            if (!SQLLiteDB.isEmpty()) {
-                connection = DriverManager.getConnection(SQLLiteDB);
+            if (!SQLConnectionString.isEmpty()) {
+                connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                statement.executeUpdate("drop table if exists wordvector");
-                statement.executeUpdate("create table if not exists wordvector (word text, columnid integer, weight numeric, modality integer ) ");
-                //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
+                //statement.executeUpdate("drop table if exists wordvector");
+                statement.executeUpdate("create table if not exists entityvector (word entityid, columnid integer, weight numeric, entitytype text, experimentId text) ");
+                statement.executeUpdate(String.format("Delete from entityvector where  ExperimentId = '%s'", experimentId));
             }
             PreparedStatement bulkInsert = null;
-            String sql = "insert into wordvector values(?,?,?,? );";
+            String sql = "insert into entityvector values(?,?,?,?,? );";
 
             try {
                 connection.setAutoCommit(false);
@@ -499,13 +628,14 @@ public class TopicWordEmbeddings {
                         bulkInsert.setString(1, word < numWords ? vocabulary.lookupObject(word).toString() : String.valueOf(word - numWords));
                         bulkInsert.setInt(2, col);
                         bulkInsert.setDouble(3, weights[word * stride + col]);
-                        bulkInsert.setInt(4, word < numWords ? modality : -1);
+                        bulkInsert.setString(4, word < numWords ? entityType : "topic");
+                        bulkInsert.setString(5,experimentId);
                         bulkInsert.executeUpdate();
 
                     }
                 }
 
-                if (!SQLLiteDB.isEmpty()) {
+                if (!SQLConnectionString.isEmpty()) {
                     connection.commit();
                 }
 
@@ -623,7 +753,7 @@ public class TopicWordEmbeddings {
 
         InstanceList instances = InstanceList.load(new File(inputFile.value));
 
-        TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances.getDataAlphabet(), numDimensions.value, 0, windowSizeOption.value, 0);
+        TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances.getDataAlphabet(), numDimensions.value, 0, windowSizeOption.value, 0, false);
         matrix.queryWord = exampleWord.value;
         //matrix.setNumIterations(numIterationsOption.value);
         matrix.countWords(instances, samplingFactorOption.value);

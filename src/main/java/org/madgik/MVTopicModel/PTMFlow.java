@@ -57,8 +57,8 @@ public class PTMFlow {
     int topWords = 20;
     int showTopicsInterval = 50;
     byte numModalities = 6;
-    double docTopicsThreshold = 0.03;
-    int docTopicsMax = -1;
+    
+    
     int numOfThreads = 4;
     int numTopics = 400;
     int numIterations = 800; //Max 2000
@@ -66,11 +66,11 @@ public class PTMFlow {
     int burnIn = 50;
     int optimizeInterval = 50;
     ExperimentType experimentType = ExperimentType.ACM;
-    
+
     double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
-    
+
     boolean ACMAuthorSimilarity = true;
     boolean calcTopicDistributionsAndTrends = true;
     boolean calcEntitySimilarities = false;
@@ -87,6 +87,7 @@ public class PTMFlow {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String experimentId = "";
     String previousModelFile = "";
+    int limitDocs = 0;
 
     public PTMFlow() throws IOException {
         this(null);
@@ -103,7 +104,7 @@ public class PTMFlow {
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" +String.format("%.1f_%.4f_%.4f", pruneMaxPerc,  pruneCntPerc ,  pruneLblCntPerc) + "PRN_" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (useTypeVectors ? "WV" : "") + PPRenabled.name();
+                + numIterations + "IT_" + numChars + "CHRs_" + String.format("%.1f_%.4f_%.4f", pruneMaxPerc, pruneCntPerc, pruneLblCntPerc) + "PRN_" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (trainTypeVectors ? "WV" : "")+((limitDocs>0)?("Lmt_"+limitDocs):"") + PPRenabled.name();
 
         String experimentDescription = experimentString + ": \n";
 
@@ -122,8 +123,8 @@ public class PTMFlow {
         if (runWordEmbeddings) {
             logger.info(" calc word embeddings starting");
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc,  numChars, PPRenabled,
-                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
+                    pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
+                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly, limitDocs);
 
             logger.info(" instances added through pipe");
 
@@ -149,8 +150,9 @@ public class PTMFlow {
             logger.info(" TopicModelling has started");
             String batchId = "-1";
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc,  numChars, PPRenabled,
-                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly);
+                    pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
+                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly
+            ,limitDocs);
             logger.info("Instances added through pipe");
 
             double beta = 0.01;
@@ -178,7 +180,6 @@ public class PTMFlow {
             model.burninPeriod = burnIn;
             model.setNumThreads(numOfThreads);
 
-            
             model.addInstances(instances, batchId, vectorSize, "");//trainingInstances);//instances);
             logger.info(" instances added");
 
@@ -186,21 +187,10 @@ public class PTMFlow {
             model.estimate();
             logger.info("Model estimated");
 
-            model.saveTopics(SQLConnectionString, experimentId, batchId);
-            logger.info("Topics Saved");
-
-            PrintWriter outState = null;// new PrintWriter(new FileWriter((new File(outputDocTopicsFile))));
-
-            model.printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLConnectionString, experimentId, batchId);
-
-            if (outState != null) {
-                outState.close();
-            }
-
-            logger.info("printDocumentTopics finished");
-
+            model.saveResults(SQLConnectionString, experimentId,batchId);
+            logger.info("Model saved");
+            
             logger.info("Model Id: \n" + experimentId);
-
             logger.info("Model Metadata: \n" + model.getExpMetadata());
 
             //if (modelEvaluationFile != null) {
@@ -217,42 +207,14 @@ public class PTMFlow {
                 logger.error(e.getMessage());
             }
 
-            experimentDescription = "Multi View Topic Modeling Analysis on ACM corpus";
-            model.saveExperiment(SQLConnectionString, experimentId, experimentDescription);
+            //experimentDescription = "Multi View Topic Modeling Analysis";
+            //model.saveExperiment(SQLConnectionString, experimentId, experimentDescription);
 
             if (experimentType == ExperimentType.LFR) {
                 FindGroundTruthCommunities(SQLConnectionString, experimentId);
             }
 
-            logger.info("Insert default topic descriptions");
-
-            try {
-
-                String insertTopicDescriptionSql = "INSERT into TopicDescription (Title, Category, TopicId , VisibilityIndex, ExperimentId )\n"
-                        + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
-                        + "from  TopicDescriptionView\n"
-                        + " where experimentID = '" + experimentId + "' \n"
-                        + " GROUP BY TopicID";
-
-                connection = DriverManager.getConnection(SQLConnectionString);
-                Statement statement = connection.createStatement();
-                statement.executeUpdate(insertTopicDescriptionSql);
-                //ResultSet rs = statement.executeQuery(sql);
-
-            } catch (SQLException e) {
-                // if the error message is "out of memory", 
-                // it probably means no database file is found
-                logger.error(e.getMessage());
-            } finally {
-                try {
-                    if (connection != null) {
-                        connection.close();
-                    }
-                } catch (SQLException e) {
-                    // connection close failed.
-                    logger.error(e);
-                }
-            }
+          
         }
         if (calcTopicDistributionsAndTrends) {
 
@@ -267,7 +229,7 @@ public class PTMFlow {
         }
 
         if (calcTopicSimilarities) {
-            experimentId =  "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
+            experimentId = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
             CalcTopicSimilarities(SQLConnectionString, experimentId);
         }
 
@@ -637,7 +599,7 @@ public class PTMFlow {
         // FeatureVector.toSimpFilefff
     }
 
-    private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount, double docProportionMaxCutoff,  boolean preserveCase)
+    private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount, double docProportionMaxCutoff, boolean preserveCase)
             throws IOException {
 
         //SimpleTokenizer st = new SimpleTokenizer(new File("stoplists/en.txt"));
@@ -671,7 +633,7 @@ public class PTMFlow {
             pipes.add(docCounter);
         }
         //TODO: TEST pipes.add(new FeatureSequenceRemovePlural(alphabet));
-        
+
         Pipe serialPipe = new SerialPipes(pipes);
         Iterator<Instance> iterator = serialPipe.newIteratorFrom(input.iterator());
 
@@ -748,7 +710,7 @@ public class PTMFlow {
 //        }
     }
 
-    public void createCitationGraphFile(String outputCsv, String SQLLitedb) {
+    public void createCitationGraphFile(String outputCsv, String SQLConnectionString) {
         //String SQLConnectionString = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
 
         Connection connection = null;
@@ -760,7 +722,7 @@ public class PTMFlow {
                     + "# fromNodeId, toNodeId \n";
             out.write(header);
 
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
 
             String sql = "select id, ref_id from papers where ref_num >0 ";
             Statement statement = connection.createStatement();
@@ -813,11 +775,11 @@ public class PTMFlow {
 
     }
 
-    public void CalcEntityTopicDistributionsAndTrends(String SQLLitedb, String experimentId) {
+    public void CalcEntityTopicDistributionsAndTrends(String SQLConnectionString, String experimentId) {
         Connection connection = null;
         try {
 
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
             logger.info("Calc topic Entity Topic Distributions and Trends started");
@@ -952,19 +914,19 @@ public class PTMFlow {
 
     }
 
-    public void CalcTopicSimilarities(String SQLLitedb, String experimentId) {
+    public void CalcTopicSimilarities(String SQLConnectionString, String experimentId) {
 
         Connection connection = null;
         try {
 
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
             logger.info("Calc topic similarities started");
 
             String distinctTopicsSQL = "Select  TopicId,  ExperimentId, count(*) as cnt\n"
                     + "from TopicVector\n  "
-                    + ( StringUtils.isBlank(experimentId)? "" : String.format("where experimentId = '%s' \n  ", experimentId))
+                    + (StringUtils.isBlank(experimentId) ? "" : String.format("where experimentId = '%s' \n  ", experimentId))
                     + "group by TopicId,  ExperimentId";
 
             ResultSet rs = statement.executeQuery(distinctTopicsSQL);
@@ -1066,7 +1028,7 @@ public class PTMFlow {
 
     }
 
-    public void calcPPRSimilarities(String SQLLitedb) {
+    public void calcPPRSimilarities(String SQLConnectionString) {
         //calc similarities
 
         //logger.info("PPRSimilarities calculation Started");
@@ -1074,7 +1036,7 @@ public class PTMFlow {
         try {
             // create a database connection
             //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
             logger.info("PPRSimilarities calculation Started");
@@ -1188,7 +1150,7 @@ public class PTMFlow {
         logger.info("Pub citation similarities calculation finished");
     }
 
-    public void FindGroundTruthCommunities(String SQLLitedb, String experimentId) {
+    public void FindGroundTruthCommunities(String SQLConnectionString, String experimentId) {
         //calc similarities
 
         //logger.info("PPRSimilarities calculation Started");
@@ -1196,7 +1158,7 @@ public class PTMFlow {
         try {
             // create a database connection
             //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
             logger.info("PPRSimilarities calculation Started");
@@ -1317,7 +1279,7 @@ public class PTMFlow {
         logger.info("Pub citation similarities calculation finished");
     }
 
-    public void calcSimilarities(String SQLLitedb, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
+    public void calcSimilarities(String SQLConnectionString, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
         //calc similarities
 
         logger.info("similarities calculation Started");
@@ -1325,7 +1287,7 @@ public class PTMFlow {
         try {
             // create a database connection
             //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
             String sql = "";
@@ -1573,7 +1535,7 @@ public class PTMFlow {
     }
 
     public InstanceList[] GenerateAlphabets(String SQLConnection, ExperimentType experimentType, String dictDir, byte numModalities,
-            double pruneCntPerc, double pruneLblCntPerc, double pruneMaxPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText) {
+            double pruneCntPerc, double pruneLblCntPerc, double pruneMaxPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText, int limitDocs) {
 
         //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
         // Begin by importing documents from text to feature sequences
@@ -1604,7 +1566,7 @@ public class PTMFlow {
 
             if (m == 1 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM) //keywords
             {
-              //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
+                //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
             instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
         }
@@ -1622,7 +1584,7 @@ public class PTMFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "select pubviewtxt.pubId, text, fulltext from pubviewtxt LIMIT 100000";
+            String txtsql = "select pubviewtxt.pubId, text, fulltext from pubviewtxt " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
             if (experimentType == ExperimentType.HEALTHTender) {
                 txtsql = "select distinct on (pubviewtxt.pubId) pubviewtxt.pubId, text, fulltext from pubviewtxt"
@@ -1630,7 +1592,7 @@ public class PTMFlow {
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewtxt.pubId \n"
                         + "                         WHERE ((pubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewtxt.pubyear>='2004'"
-                        ;//+ " LIMIT 10000";
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
             }
 
             if (experimentType == ExperimentType.HEALTHTenderPM) {
@@ -1638,24 +1600,25 @@ public class PTMFlow {
                         + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewtxt.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewtxt.pubId \n"
-                        + "                         WHERE ((pmpubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewtxt.pubyear>='2004'";
-                        //+ " LIMIT 1000";
+                        + "                         WHERE ((pmpubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewtxt.pubyear>='2004'"
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                //+ " LIMIT 1000";
             }
 
             if (experimentType == ExperimentType.ACM) {
 
                 if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  ";
+                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.OneWay) {
 
-                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway ";
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway "+ ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewtwoway ";
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewtwoway "+ ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
                 }
 
             } else if (experimentType == ExperimentType.OpenAIRE) {
-                sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo";
+                sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo"+ ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
             } else if (experimentType == ExperimentType.HEALTHTender) {
                 sql = " select distinct on (pubviewsideinfo.pubId)   pubviewsideinfo.pubId,  citations,  keywords, meshterms from pubviewsideinfo"
@@ -1663,14 +1626,15 @@ public class PTMFlow {
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewsideinfo.pubId \n"
                         + "                         WHERE ((pubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewsideinfo.pubyear>='2004'"
-                        ;//+ " LIMIT 10000";
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
 
             } else if (experimentType == ExperimentType.HEALTHTenderPM) {
                 sql = " select distinct on (pmpubviewsideinfo.pubId)   pmpubviewsideinfo.pubId,  citations,  keywords, meshterms from pmpubviewsideinfo"
                         + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewsideinfo.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                         + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewsideinfo.pubId \n"
-                        + "                         WHERE ((pmpubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewsideinfo.pubyear>='2004'";
+                        + "                         WHERE ((pmpubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewsideinfo.pubyear>='2004'"
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 //+ " LIMIT 1000";
 
             }
@@ -1856,8 +1820,7 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewdbpedia.pubId \n"
-                            + "                         WHERE ((pubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewdbpedia.pubyear>='2004'"
-                            ;//+ " LIMIT 10000";
+                            + "                         WHERE ((pubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewdbpedia.pubyear>='2004'";//+ " LIMIT 10000";
 
                 }
                 if (experimentType == ExperimentType.HEALTHTenderPM) {
@@ -1904,8 +1867,7 @@ public class PTMFlow {
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
                             + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewfunding.pubId \n"
-                            + "                         WHERE ((pubviewfunding.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewfunding.pubyear>='2004'"
-                            ;//+ " LIMIT 10000";
+                            + "                         WHERE ((pubviewfunding.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewfunding.pubyear>='2004'";//+ " LIMIT 10000";
                 }
                 ResultSet rs = txtstatement.executeQuery(SQLquery);
 
@@ -1942,7 +1904,7 @@ public class PTMFlow {
         if (!ignoreText) {
             try {
                 int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * pruneCntPerc);
-                GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, pruneMaxPerc,  false);
+                GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, pruneMaxPerc, false);
                 instances[0].addThruPipe(instanceBuffer.get(0).iterator());
                 //Alphabet tmpAlp = instances[0].getDataAlphabet();
                 //ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(txtAlphabetFile)));
@@ -1966,7 +1928,7 @@ public class PTMFlow {
 
         // pruning for all other modalities no text
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
-            if ( pruneLblCntPerc > 0) {
+            if (pruneLblCntPerc > 0) {
 
                 // Check which type of data element the instances contain
                 Instance firstInstance = instances[m].get(0);
@@ -2037,13 +1999,13 @@ public class PTMFlow {
 
     }
 
-    public void createRefACMTables(String SQLLitedb) {
+    public void createRefACMTables(String SQLConnectionString) {
         //String SQLConnectionString = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
 
         Connection connection = null;
         try {
 
-            connection = DriverManager.getConnection(SQLLitedb);
+            connection = DriverManager.getConnection(SQLConnectionString);
 
             Statement statement = connection.createStatement();
             statement.executeUpdate("create table if not exists Author (AuthorId nvarchar(50), FirstName nvarchar(50), LastName nvarchar(50), MiddleName nvarchar(10), Affilication TEXT) ");
