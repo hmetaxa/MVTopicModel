@@ -262,7 +262,7 @@ public class CordisDataJSONParse {
                         String text = section.getString("text");
                         if (name.equals("title")) {
                             title = text;
-                        } else if (name.equals("objective")) {
+                        } else if (name.equals("1")) {
                             project_objective = text;
                             sectionsList.add(name + "::" + text);
                         } else {
