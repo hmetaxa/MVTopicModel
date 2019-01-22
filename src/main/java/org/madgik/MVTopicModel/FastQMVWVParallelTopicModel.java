@@ -2791,10 +2791,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         double topicProportion = 0;
                         double normalizeSum = 0;
                         for (Byte m = 0; m < cntEnd; m++) {
-                            //Omiros: TODO: I should reweight each modality's contribution in the proportion of the document based on its discrimination power (skew index)
-                            //topicProportion += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m] * ((double) topicCounts[m][topic] + (double) gamma[m] * alpha[m][topic]) / (docLen[m] + alphaSum[m]);
-                            //normalizeSum += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m];
-
+                            //I reweight each modality's contribution in the proportion of the document based on its discrimination power (skew index) and its relation to text
                             topicProportion += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m] * ((double) topicCounts[m][topic] + (double) gamma[m] * alpha[m][topic]) / (docLen[m] + (double) gamma[m] * alphaSum[m]);
                             normalizeSum += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m];
                         }
@@ -2804,9 +2801,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                     Arrays.sort(sortedTopics);
 
-//      statement.executeUpdate("insert into person values(1, 'leo')");
-//      statement.executeUpdate("insert into person values(2, 'yui')");
-//      ResultSet rs = statement.executeQuery("select * from person");
                     for (int i = 0; i < max; i++) {
                         if (sortedTopics[i].getWeight() < threshold) {
                             break;
