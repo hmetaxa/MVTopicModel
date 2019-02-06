@@ -57,8 +57,7 @@ public class PTMFlow {
     int topWords = 20;
     int showTopicsInterval = 50;
     byte numModalities = 6;
-    
-    
+
     int numOfThreads = 4;
     int numTopics = 400;
     int numIterations = 800; //Max 2000
@@ -87,7 +86,7 @@ public class PTMFlow {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String experimentId = "";
     String previousModelFile = "";
-    int limitDocs = 0;
+    int limitDocs = 10000;
 
     public PTMFlow() throws IOException {
         this(null);
@@ -104,7 +103,9 @@ public class PTMFlow {
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" + String.format("%.1f_%.4f_%.4f", pruneMaxPerc, pruneCntPerc, pruneLblCntPerc) + "PRN_" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (trainTypeVectors ? "WV" : "")+((limitDocs>0)?("Lmt_"+limitDocs):"") + PPRenabled.name();
+                + numIterations + "IT_" + numChars + "CHRs_" + numModalities + "M_" + (trainTypeVectors ? "WV" : "") + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
+
+        String experimentDetails = String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f pruneLblCntPerc:%.4f burnIn:%d numOfThreads:%d similarityType:%s", this.pruneMaxPerc, pruneCntPerc, pruneLblCntPerc, burnIn, numOfThreads, similarityType.toString());
 
         String experimentDescription = experimentString + ": \n";
 
@@ -151,8 +152,7 @@ public class PTMFlow {
             String batchId = "-1";
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
                     pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly
-            ,limitDocs);
+                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly, limitDocs);
             logger.info("Instances added through pipe");
 
             double beta = 0.01;
@@ -187,9 +187,9 @@ public class PTMFlow {
             model.estimate();
             logger.info("Model estimated");
 
-            model.saveResults(SQLConnectionString, experimentId,batchId);
+            model.saveResults(SQLConnectionString, experimentId, batchId,experimentDetails);
             logger.info("Model saved");
-            
+
             logger.info("Model Id: \n" + experimentId);
             logger.info("Model Metadata: \n" + model.getExpMetadata());
 
@@ -209,12 +209,10 @@ public class PTMFlow {
 
             //experimentDescription = "Multi View Topic Modeling Analysis";
             //model.saveExperiment(SQLConnectionString, experimentId, experimentDescription);
-
             if (experimentType == ExperimentType.LFR) {
                 FindGroundTruthCommunities(SQLConnectionString, experimentId);
             }
 
-          
         }
         if (calcTopicDistributionsAndTrends) {
 
@@ -1611,14 +1609,14 @@ public class PTMFlow {
                     sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.OneWay) {
 
-                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway "+ ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewtwoway "+ ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewtwoway " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
                 }
 
             } else if (experimentType == ExperimentType.OpenAIRE) {
-                sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo"+ ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo" + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
             } else if (experimentType == ExperimentType.HEALTHTender) {
                 sql = " select distinct on (pubviewsideinfo.pubId)   pubviewsideinfo.pubId,  citations,  keywords, meshterms from pubviewsideinfo"

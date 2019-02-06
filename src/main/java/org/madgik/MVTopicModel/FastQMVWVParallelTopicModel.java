@@ -32,11 +32,14 @@ import gnu.trove.map.hash.TIntIntHashMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import static java.lang.Math.log;
 import java.sql.Connection;
+
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -213,6 +216,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         logger.info("FastQMV LDANumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
 
         appendMetadata("Initial NumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
+
         p_a = new double[numModalities][numModalities];
         p_b = new double[numModalities][numModalities];
         pMean = new double[numModalities][numModalities];; // modalities correlation
@@ -1377,7 +1381,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //                        + "where similarity>0.65 and ExperimentId = '%s' group by experimentid, entityid1)\n"
 //                        + "group by experimentid", experimentId);
                 PreparedStatement bulkInsert = null;
-                String sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost) values(?,?,?, ?, ? );";
+                String sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost, ended) values(?,?,?, ?, ?,? );";
 
                 try {
                     connection.setAutoCommit(false);
@@ -1388,6 +1392,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     bulkInsert.setString(3, expMetadata.toString());
                     bulkInsert.setDouble(4, 0.6);
                     bulkInsert.setInt(5, Math.round(boost));
+
+                    //Date date = 
+                    LocalDateTime now = LocalDateTime.now();
+                    Timestamp timestamp = Timestamp.valueOf(now);
+
+                    bulkInsert.setTimestamp(6, timestamp);
 
                     bulkInsert.executeUpdate();
 
@@ -1430,7 +1440,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    public void saveResults(String SQLConnectionString, String experimentId, String batchId) {
+    public void saveResults(String SQLConnectionString, String experimentId, String batchId, String description) {
+
         saveTopics(SQLConnectionString, experimentId, batchId);
         logger.info("Topics Saved");
 
@@ -1440,7 +1451,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         int docTopicsMax = -1;
         printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLConnectionString, experimentId, batchId);
         logger.info("Topics per Doc Saved");
-        saveExperiment(SQLConnectionString, experimentId, "Multi View Topic Modeling Analysis");
+
+        saveExperiment(SQLConnectionString, experimentId, description);
+
         logger.info("Experiment Details Saved");
 
         if (trainTypeVectors) {
