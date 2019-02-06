@@ -28,8 +28,7 @@ public class D4IPTMFlow {
 
     public enum ExperimentType {
 
-        HEALTHTender,
-        HEALTHTenderPM,
+                
         D4I
     }
 
@@ -1283,8 +1282,7 @@ public class D4IPTMFlow {
             String entityType = "";
             switch (experimentType) {
 
-                case HEALTHTender:
-                case HEALTHTenderPM:
+                case D4I:                
                     entityType = "Project";
                     sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
                             + "                                                        from EntityTopicDistribution                                                        \n"
@@ -1321,8 +1319,8 @@ public class D4IPTMFlow {
                 switch (experimentType) {
 
                     
-                    case HEALTHTender:
-                    case HEALTHTenderPM:
+
+                    case D4I:
                         newLabelId = rs.getString("projectId");
                         break;
 
@@ -1477,7 +1475,7 @@ public class D4IPTMFlow {
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
             pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
 
-            if (m == 1 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM) //keywords
+            if (m == 1 && experimentType == ExperimentType.D4I) //keywords
             {
                 //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
@@ -1497,18 +1495,10 @@ public class D4IPTMFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "select pubviewtxt.pubId, text, fulltext from pubviewtxt " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+            String txtsql = "select doctxt_view.pubId, text, fulltext from doctxt_view and  pmpubviewtxt.pubyear>='2004'" + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
-            if (experimentType == ExperimentType.HEALTHTender) {
-                txtsql = "select distinct on (pubviewtxt.pubId) pubviewtxt.pubId, text, fulltext from pubviewtxt"
-                        + " LEFT JOIN pubproject on pubproject.pubId = pubviewtxt.pubId\n"
-                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                        + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewtxt.pubId \n"
-                        + "                         WHERE ((pubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewtxt.pubyear>='2004'"
-                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
-            }
-
-            if (experimentType == ExperimentType.HEALTHTenderPM) {
+         
+         /*   if (experimentType == ExperimentType.D4I) {
                 txtsql = "select distinct on (pmpubviewtxt.pubId) pmpubviewtxt.pubId, text from pmpubviewtxt"
                         + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewtxt.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
@@ -1517,22 +1507,10 @@ public class D4IPTMFlow {
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 //+ " LIMIT 1000";
             }
-
+*/
             
-            else if (experimentType == ExperimentType.HEALTHTender) {
-                sql = " select distinct on (pubviewsideinfo.pubId)   pubviewsideinfo.pubId,  citations,  keywords, meshterms from pubviewsideinfo"
-                        + " LEFT JOIN pubproject on pubproject.pubId = pubviewsideinfo.pubId\n"
-                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                        + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewsideinfo.pubId \n"
-                        + "                         WHERE ((pubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewsideinfo.pubyear>='2004'"
-                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
-
-            } else if (experimentType == ExperimentType.HEALTHTenderPM) {
-                sql = " select distinct on (pmpubviewsideinfo.pubId)   pmpubviewsideinfo.pubId,  citations,  keywords, meshterms from pmpubviewsideinfo"
-                        + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewsideinfo.pubId\n"
-                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                        + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewsideinfo.pubId \n"
-                        + "                         WHERE ((pmpubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewsideinfo.pubyear>='2004'"
+        if (experimentType == ExperimentType.D4I) {
+                sql = "select doctags_view.Id,   keywords, meshterms from doctags_view"                        
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 //+ " LIMIT 1000";
 
@@ -1551,8 +1529,7 @@ public class D4IPTMFlow {
                 switch (experimentType) {
 
             
-                    case HEALTHTender:
-                    case HEALTHTenderPM:
+                    case D4I:                    
                         txt = rstxt.getString("text");
                         instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("pubId"), "text"));
 
@@ -1574,8 +1551,7 @@ public class D4IPTMFlow {
                     switch (experimentType) {
 
            
-                        case HEALTHTender:
-                        case HEALTHTenderPM:
+                        case D4I:                        
                             if (numModalities > 1) {
                                 String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
                                 if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
@@ -1590,26 +1566,7 @@ public class D4IPTMFlow {
                                 }
                             }
 
-                            if (numModalities > 4) {
-                                String tmpStr = rs.getString("Citations");//.replace("\t", ",");
-                                String citationStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] citations = tmpStr.trim().split(",");
-                                    for (int j = 0; j < citations.length; j++) {
-                                        String[] pairs = citations[j].trim().split(":");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                citationStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            citationStr += citations[j] + ",";
-
-                                        }
-                                    }
-                                    citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("pubId"), "citation"));
-                                }
-                            }
+                          
 
                             break;
 
@@ -1619,30 +1576,16 @@ public class D4IPTMFlow {
                 }
             }
 
-            if (numModalities > 3 && (experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) {
+            if (numModalities > 3 && (experimentType == ExperimentType.D4I )) {
                 logger.info(" Getting DBpedia annotations from the database");
                 // get txt data 
                 Statement dbPediastatement = connection.createStatement();
                 dbPediastatement.setFetchSize(10000);
-                String SQLquery = "select   pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia";
-                if (experimentType == ExperimentType.HEALTHTender) {
-                    SQLquery = "select distinct on (pubviewdbpedia.pubId)    pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia"
-                            + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
-                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                            + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewdbpedia.pubId \n"
-                            + "                         WHERE ((pubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewdbpedia.pubyear>='2004'";//+ " LIMIT 10000";
-
-                }
-                if (experimentType == ExperimentType.HEALTHTenderPM) {
-                    SQLquery = "select distinct on (pmpubviewdbpedia.pubId)    pmpubviewdbpedia.pubId,  DBPediaResources from pmpubviewdbpedia"
-                            + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewdbpedia.pubId\n"
-                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                            + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewdbpedia.pubId \n"
-                            + "                         WHERE ((pmpubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewdbpedia.pubyear>='2004'";
-                    // + " LIMIT 1000";
-
-                }
-                ResultSet rs = txtstatement.executeQuery(SQLquery);
+                
+                sql = "select docdbpedia_view.Id,   DBPediaResources  from docdbpedia_view"                        
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                              
+                ResultSet rs = txtstatement.executeQuery(sql);
 
                 while (rs.next()) {
                     String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
@@ -1666,31 +1609,7 @@ public class D4IPTMFlow {
                 }
             }
 
-            if (numModalities > 5 && ( experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) {
-                logger.info(" Getting funding info from the database");
-                // get txt data 
-                Statement dbfundingstatement = connection.createStatement();
-                dbfundingstatement.setFetchSize(10000);
-                String SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding ";
-                if (experimentType == ExperimentType.HEALTHTender) {
-                    SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding "
-                            + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
-                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                            + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewfunding.pubId \n"
-                            + "                         WHERE ((pubviewfunding.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewfunding.pubyear>='2004'";//+ " LIMIT 10000";
-                }
-                ResultSet rs = txtstatement.executeQuery(SQLquery);
-
-                while (rs.next()) {
-
-                    String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
-                    if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
-
-                        instanceBuffer.get(5).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
-                    }
-
-                }
-            }
+     
 
         } catch (SQLException e) {
             // if the error message is "out of memory", 
@@ -1773,7 +1692,7 @@ public class D4IPTMFlow {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 4 && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) ? prCnt * 2 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 3 && experimentType == ExperimentType.D4I )) ? prCnt * 2 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),

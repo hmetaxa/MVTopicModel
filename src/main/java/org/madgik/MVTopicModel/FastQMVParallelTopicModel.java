@@ -2640,12 +2640,10 @@ public class FastQMVParallelTopicModel implements Serializable {
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                // statement.executeUpdate("drop table if exists PubTopic");
-                //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
+                
             }
             PreparedStatement bulkInsert = null;
-            String sql = "insert into PubTopic values(?,?,?,?,? );";
+            String sql = "insert into Doc_Topic values(?,?,?,?,? );";
 
             try {
                 connection.setAutoCommit(false);
@@ -2708,11 +2706,11 @@ public class FastQMVParallelTopicModel implements Serializable {
                         }
 
                         if (!SQLConnectionString.isEmpty()) {
-                            //  sql += String.format(Locale.ENGLISH, "insert into PubTopic values('%s',%d,%.4f,'%s' );", docId, sortedTopics[i].getID(), sortedTopics[i].getWeight(), experimentId);
+                            
                             bulkInsert.setString(1, docId);
                             bulkInsert.setInt(2, sortedTopics[i].getID());
-                            bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);
-                            bulkInsert.setString(4, batchId);
+                              bulkInsert.setBoolean(3, true);
+                            bulkInsert.setDouble(4, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);                            
                             bulkInsert.setString(5, experimentId);
                             bulkInsert.executeUpdate();
 
@@ -2780,9 +2778,8 @@ public class FastQMVParallelTopicModel implements Serializable {
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                // statement.executeUpdate("drop table if exists PubTopic");
-                //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
+                
+                statement.executeUpdate(String.format("Delete from Doc_Topic where  ExperimentId = '%s'", experimentId));
 
                 //statement.executeUpdate("create table if not exists Experiment (ExperimentId nvarchar(50), Description nvarchar(200), Metadata nvarchar(500), InitialSimilarity Double, PhraseBoost Integer) ");
                 String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
@@ -2799,8 +2796,8 @@ public class FastQMVParallelTopicModel implements Serializable {
                 deleteSQL = String.format("Delete from TopicAnalysis where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
+                
+                statement.executeUpdate(String.format("Delete from Doc_Topic where  ExperimentId = '%s'", experimentId));
 
                 //statement.executeUpdate("create table if not exists ExpDiagnostics (ExperimentId text, BatchId text, EntityId text, EntityType int, ScoreName text, Score double )");
                 deleteSQL = String.format("Delete from ExpDiagnostics where  ExperimentId = '%s'", experimentId);
