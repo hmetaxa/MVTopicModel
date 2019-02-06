@@ -469,7 +469,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 //                    + "    ifnull((select count from pubDBpediaResource where pubId = ? and Resource=? and mention=?), 0) + 1)";
 //         
             
-            String insertSql ="insert into pubDBpediaResource (pubId, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?,0)\n" +
+            String insertSql ="insert into pubDBpediaResource (pubId, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?,1)\n" +
 "ON CONFLICT (pubId, resource,mention) DO UPDATE SET \n" +
 "support=EXCLUDED.Support,\n" +
 "similarity=EXCLUDED.similarity, \n" +
