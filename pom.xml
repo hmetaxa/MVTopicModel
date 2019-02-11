@@ -27,11 +27,6 @@
             <version>3.0.3</version>
         </dependency>
         <dependency>
-            <groupId>com.sree.textbytes</groupId>
-            <artifactId>jtopia</artifactId>
-            <version>0.0.3</version>
-        </dependency>
-        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.1.1.jre7</version>
@@ -55,6 +50,11 @@
             <groupId>cc.mallet</groupId>
             <artifactId>mallet</artifactId>
             <version>2.0.8</version>
+        </dependency>
+        <dependency>
+            <groupId>com.sree.textbytes</groupId>
+            <artifactId>jtopia</artifactId>
+            <version>0.0.3</version>
         </dependency>
     </dependencies>
     <repositories>
