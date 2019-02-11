@@ -28,11 +28,10 @@ public class PTMFlow {
 
     public enum ExperimentType {
 
-        ACM,        
-        
+        ACM,
         OpenAIRE,
         OAFETGrants,
-        PubMed,
+        HEALTHTender,
         HEALTHTenderPM,
         LFR,
         DBLP,
@@ -73,10 +72,10 @@ public class PTMFlow {
 
     boolean ACMAuthorSimilarity = true;
     boolean calcTopicDistributionsAndTrends = true;
-    boolean calcEntitySimilarities = true;
+    boolean calcEntitySimilarities = false;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = false;
+    boolean runTopicModelling = true;
     boolean runWordEmbeddings = false;
     boolean useTypeVectors = true;
     boolean trainTypeVectors = true;
@@ -373,11 +372,11 @@ public class PTMFlow {
 
             logger.info("Finding key phrases calculation started");
 
-            String sql = "select doc_topic.TopicId, document.title, document.abstract from \n"
-                    + "doc_topic\n"
-                    + "inner join publication on doc_topic.pubId= document.doc_id and doc_topic.Weight>0.55 \n"
+            String sql = "select pubtopic.TopicId, publication.title, publication.abstract from \n"
+                    + "PubTopic\n"
+                    + "inner join publication on PubTopic.pubId= publication.PubId and pubTOpic.Weight>0.55 \n"
                     + "where experimentId='" + experimentId + "' \n"
-                    + "order by doc_topic.topicid, weight desc";
+                    + "order by pubtopic.topicid, weight desc";
 
             ResultSet rs = statement.executeQuery(sql);
 
@@ -789,14 +788,14 @@ public class PTMFlow {
             logger.info("Insert Full Topic Distribution ");
 
             String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
-                    + "from doc_topic\n"
+                    + "select '',  PubTopic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, PubTopic.ExperimentId\n"
+                    + "from PubTopic\n"
                     + "INNER JOIN (SELECT  sum(weight) AS SumWeight, ExperimentId\n"
-                    + "FROM doc_topic\n"
-                    + "Where doc_topic.weight>0.1 \n"
-                    + " and doc_topic.ExperimentId='" + experimentId + "'  \n"
-                    + "GROUP BY  ExperimentId) SumTopicWeightView on SumTopicWeightView.ExperimentId= doc_topic.ExperimentId\n"
-                    + "group By doc_topic.TopicId, doc_topic.ExperimentId, SumTopicWeightView.SumWeight\n"
+                    + "FROM PubTopic\n"
+                    + "Where PubTopic.weight>0.1 \n"
+                    + " and PubTopic.ExperimentId='" + experimentId + "'  \n"
+                    + "GROUP BY  ExperimentId) SumTopicWeightView on SumTopicWeightView.ExperimentId= PubTopic.ExperimentId\n"
+                    + "group By PubTopic.TopicId, PubTopic.ExperimentId, SumTopicWeightView.SumWeight\n"
                     + "Order by  NormWeight Desc";
 
             statement.executeUpdate(SQLstr);
@@ -804,91 +803,91 @@ public class PTMFlow {
             logger.info("Trend Topic distribution for the whole coprus");
 
             SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
-                    + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                    + "from doc_topic\n"
-                    + "Inner Join Document on doc_topic.docid= document.Docid and doc_topic.weight>0.1\n"
-                    + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                    + "FROM doc_topic\n"
-                    + "INNER JOIN Document ON doc_topic.docid= Document.Docid AND\n"
-                    + "doc_topic.weight>0.1\n "
-                    + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                    + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                    + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                    + "Order by Document.BatchId,   NormWeight Desc";
+                    + "select Publication.BatchId,  PubTopic.TopicId, '', 'CorpusTrend', \n"
+                    + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  PubTopic.ExperimentId\n"
+                    + "from PubTopic\n"
+                    + "Inner Join Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1\n"
+                    + "INNER JOIN (SELECT Publication.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
+                    + "FROM PubTopic\n"
+                    + "INNER JOIN Publication ON PubTopic.PubId= Publication.PubId AND\n"
+                    + "PubTopic.weight>0.1\n "
+                    + "and PubTopic.ExperimentId='" + experimentId + "'   \n"
+                    + "GROUP BY Publication.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Publication.BatchId and SumTopicWeightPerBatchView.ExperimentId= PubTopic.ExperimentId\n"
+                    + "group By Publication.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, PubTopic.TopicId, PubTopic.ExperimentId\n"
+                    + "Order by Publication.BatchId,   NormWeight Desc";
 
             statement.executeUpdate(SQLstr);
             logger.info("Project Topic distribution");
 
             SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "SELECT '', doc_topic.TopicId, Doc_Project.ProjectId,'Project',\n"
-                    + "           round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                    + "             doc_topic.ExperimentId\n"
-                    + "      FROM doc_topic\n"
-                    + "      INNER JOIN  Doc_Project ON doc_topic.Doc_id = Doc_Project.Doc_id AND doc_topic.weight > 0.1\n"
-                    + "      and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                    + "           INNER JOIN (SELECT Doc_Project.ProjectId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                    + "           FROM doc_topic\n"
-                    + "           INNER JOIN   Doc_Project ON doc_topic.Doc_id = Doc_Project.Doc_id AND  doc_topic.weight > 0.1\n"
-                    + "           GROUP BY  ExperimentId,Doc_Project.ProjectId)\n"
-                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.ProjectId = Doc_Project.ProjectId AND \n"
-                    + "                                           SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                            \n"
-                    + "     GROUP BY Doc_Project.ProjectId,\n"
+                    + "SELECT '', PubTopic.TopicId, PubProject.ProjectId,'Project',\n"
+                    + "           round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "             PubTopic.ExperimentId\n"
+                    + "      FROM PubTopic\n"
+                    + "      INNER JOIN  PubProject ON PubTopic.PubId = PubProject.PubId AND PubTopic.weight > 0.1\n"
+                    + "      and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "           INNER JOIN (SELECT PubProject.ProjectId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "           FROM PubTopic\n"
+                    + "           INNER JOIN   PubProject ON PubTopic.PubId = PubProject.PubId AND  PubTopic.weight > 0.1\n"
+                    + "           GROUP BY  ExperimentId,PubProject.ProjectId)\n"
+                    + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.ProjectId = PubProject.ProjectId AND \n"
+                    + "                                           SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId                                            \n"
+                    + "     GROUP BY PubProject.ProjectId,\n"
                     + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                    + "              doc_topic.TopicId,\n"
-                    + "              doc_topic.ExperimentId\n"
-                    + "              order by  doc_topic.ExperimentId, Doc_Project.ProjectId, NormWeight Desc,doc_topic.ExperimentId";
+                    + "              PubTopic.TopicId,\n"
+                    + "              PubTopic.ExperimentId\n"
+                    + "              order by  PubTopic.ExperimentId, PubProject.ProjectId, NormWeight Desc,PubTopic.ExperimentId";
 
             statement.executeUpdate(SQLstr);
 
             logger.info("Funder Topic distribution");
             SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + " SELECT '', doc_topic.TopicId, PubFunder.funder,'Funder',\n"
-                    + "                               round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                    + "                                 doc_topic.ExperimentId\n"
-                    + "                          FROM doc_topic\n"
-                    + "                          INNER JOIN  PubFunder ON doc_topic.Doc_id = PubFunder.Doc_id AND doc_topic.weight > 0.1\n"
-                    + "                          and  doc_topic.ExperimentId='" + experimentId + "' \n"
+                    + " SELECT '', PubTopic.TopicId, PubFunder.funder,'Funder',\n"
+                    + "                               round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "                                 PubTopic.ExperimentId\n"
+                    + "                          FROM PubTopic\n"
+                    + "                          INNER JOIN  PubFunder ON PubTopic.PubId = PubFunder.PubId AND PubTopic.weight > 0.1\n"
+                    + "                          and  PubTopic.ExperimentId='" + experimentId + "' \n"
                     + "                        \n"
                     + "                               INNER JOIN (SELECT PubFunder.funder, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                    + "                               FROM doc_topic\n"
-                    + "                               INNER JOIN   PubFunder ON doc_topic.Doc_id = PubFunder.Doc_id AND  doc_topic.weight > 0.1\n"
+                    + "                               FROM PubTopic\n"
+                    + "                               INNER JOIN   PubFunder ON PubTopic.PubId = PubFunder.PubId AND  PubTopic.weight > 0.1\n"
                     + "                               \n"
                     + "                               GROUP BY  ExperimentId,PubFunder.funder)\n"
                     + "                               SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = PubFunder.funder AND \n"
-                    + "                                                               SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                            \n"
+                    + "                                                               SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId                                            \n"
                     + "                         GROUP BY PubFunder.funder,\n"
                     + "                                  SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                    + "                                  doc_topic.TopicId,\n"
-                    + "                                  doc_topic.ExperimentId\n"
-                    + "                                  order by  doc_topic.ExperimentId, PubFunder.funder, NormWeight Desc,doc_topic.ExperimentId";
+                    + "                                  PubTopic.TopicId,\n"
+                    + "                                  PubTopic.ExperimentId\n"
+                    + "                                  order by  PubTopic.ExperimentId, PubFunder.funder, NormWeight Desc,PubTopic.ExperimentId";
 
             statement.executeUpdate(SQLstr);
 
             logger.info("Funder Trend Topic distribution");
 
             SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + " SELECT Document.batchId, doc_topic.TopicId, PubFunder.funder,'FunderTrend',\n"
-                    + "                               round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                    + "                                 doc_topic.ExperimentId\n"
-                    + "                          FROM doc_topic\n"
-                    + "                          INNER JOIN Document on doc_topic.Doc_id= Document.Doc_id and doc_topic.weight>0.1\n"
-                    + "                          and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                    + "                          INNER JOIN  PubFunder ON doc_topic.Doc_id = PubFunder.Doc_id                           \n"
-                    + "                               INNER JOIN (SELECT PubFunder.funder, Document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                    + "                               FROM doc_topic\n"
-                    + "                               Inner Join Document on doc_topic.Doc_id= Document.Doc_id and doc_topic.weight>0.1           \n"
-                    + "                               INNER JOIN   PubFunder ON doc_topic.Doc_id = PubFunder.Doc_id                                \n"
-                    + "                               GROUP BY  PubFunder.funder,Document.batchId,ExperimentId)\n"
+                    + " SELECT Publication.batchId, PubTopic.TopicId, PubFunder.funder,'FunderTrend',\n"
+                    + "                               round(sum(PubTopic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                    + "                                 PubTopic.ExperimentId\n"
+                    + "                          FROM PubTopic\n"
+                    + "                          INNER JOIN Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1\n"
+                    + "                          and  PubTopic.ExperimentId='" + experimentId + "' \n"
+                    + "                          INNER JOIN  PubFunder ON PubTopic.PubId = PubFunder.PubId                           \n"
+                    + "                               INNER JOIN (SELECT PubFunder.funder, Publication.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                    + "                               FROM PubTopic\n"
+                    + "                               Inner Join Publication on PubTopic.PubId= Publication.PubId and PubTopic.weight>0.1           \n"
+                    + "                               INNER JOIN   PubFunder ON PubTopic.PubId = PubFunder.PubId                                \n"
+                    + "                               GROUP BY  PubFunder.funder,Publication.batchId,ExperimentId)\n"
                     + "                               SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = PubFunder.funder AND \n"
-                    + "                                                               SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND                                          \n"
-                    + "                                                               SumTopicWeightPerProjectView.batchId = Document.batchId\n"
+                    + "                                                               SumTopicWeightPerProjectView.ExperimentId = PubTopic.ExperimentId  AND                                          \n"
+                    + "                                                               SumTopicWeightPerProjectView.batchId = Publication.batchId\n"
                     + "                         GROUP BY PubFunder.funder,\n"
-                    + "                             Document.batchId,\n"
+                    + "                             Publication.batchId,\n"
                     + "                                  SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                    + "                                  doc_topic.TopicId,\n"
-                    + "                                  doc_topic.ExperimentId\n"
-                    + "                                  order by  doc_topic.ExperimentId, PubFunder.funder, NormWeight Desc,doc_topic.ExperimentId";
+                    + "                                  PubTopic.TopicId,\n"
+                    + "                                  PubTopic.ExperimentId\n"
+                    + "                                  order by  PubTopic.ExperimentId, PubFunder.funder, NormWeight Desc,PubTopic.ExperimentId";
 
             statement.executeUpdate(SQLstr);
 
@@ -1044,8 +1043,8 @@ public class PTMFlow {
                     + "INNER JOIN PubCitationPPRAlias source ON source.RowId = PrLinks.Source\n"
                     + "INNER JOIN PubCitationPPRAlias target ON target.RowId = PrLinks.Target\n"
                     + "Union\n"
-                    + "Select Doc_id, CitationId, 1 as Counts From PubCitation\n"
-                    + "ORDER by Doc_id ";
+                    + "Select PubId, CitationId, 1 as Counts From PubCitation\n"
+                    + "ORDER by PubId ";
 
             ResultSet rs = statement.executeQuery(sql);
 
@@ -1062,7 +1061,7 @@ public class PTMFlow {
             while (rs.next()) {
 
                 String newLabelId = "";
-                newLabelId = rs.getString("Doc_id");
+                newLabelId = rs.getString("PubId");
                 if (!newLabelId.equals(labelId) && !labelId.isEmpty()) {
                     labelVectors.put(labelId, new SparseVector(citations, weights, citations.length, citations.length, true, true, true));
                     citations = new int[350];
@@ -1081,7 +1080,7 @@ public class PTMFlow {
 
             NormalizedDotProductMetric cosineSimilarity = new NormalizedDotProductMetric();
 
-            statement.executeUpdate("create table if not exists PPRPubCitationSimilarity (Doc_id TEXT,  Similarity double) ");
+            statement.executeUpdate("create table if not exists PPRPubCitationSimilarity (PubId TEXT,  Similarity double) ");
             String deleteSQL = String.format("Delete from PPRPubCitationSimilarity");
             statement.executeUpdate(deleteSQL);
 
@@ -1093,18 +1092,18 @@ public class PTMFlow {
                 connection.setAutoCommit(false);
                 bulkInsert = connection.prepareStatement(sql);
 
-                for (String fromDoc_id : labelVectors.keySet()) {
+                for (String fromPubId : labelVectors.keySet()) {
 
-                    if (fromDoc_id.contains("PPR")) {
+                    if (fromPubId.contains("PPR")) {
                         continue;
                     }
-                    String toDoc_id = fromDoc_id + "PPR";
+                    String toPubId = fromPubId + "PPR";
                     similarity = -1;
 
-                    if (labelVectors.get(fromDoc_id) != null && labelVectors.get(toDoc_id) != null) {
-                        similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromDoc_id), labelVectors.get(toDoc_id))); // the function returns distance not similarity
+                    if (labelVectors.get(fromPubId) != null && labelVectors.get(toPubId) != null) {
+                        similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromPubId), labelVectors.get(toPubId))); // the function returns distance not similarity
                     }
-                    bulkInsert.setString(1, fromDoc_id);
+                    bulkInsert.setString(1, fromPubId);
                     bulkInsert.setDouble(2, (double) Math.round(similarity * 1000) / 1000);
 
                     bulkInsert.executeUpdate();
@@ -1162,7 +1161,7 @@ public class PTMFlow {
 
             logger.info("PPRSimilarities calculation Started");
 
-            String sql = "select TopicId||'EXP' as GroupId, Doc_id as NodeId from doc_topic\n"
+            String sql = "select TopicId||'EXP' as GroupId, PubId as NodeId from PubTopic\n"
                     + "WHERE ExperimentId = '" + experimentId + "'\n"
                     + "UNION \n"
                     + "Select  GroupId,NodeId from GroundTruth\n"
@@ -1214,24 +1213,24 @@ public class PTMFlow {
                 connection.setAutoCommit(false);
                 bulkInsert = connection.prepareStatement(sql);
 
-                for (String fromDoc_id : labelVectors.keySet()) {
+                for (String fromPubId : labelVectors.keySet()) {
                     //boolean startComparison = false;
-                    for (String toDoc_id : labelVectors.keySet()) {
+                    for (String toPubId : labelVectors.keySet()) {
 
-                        if (fromDoc_id.contains("EXP") || !toDoc_id.contains("EXP")) {
+                        if (fromPubId.contains("EXP") || !toPubId.contains("EXP")) {
                             //if (! startComparison) {
-                            //      startComparison = (fromDoc_id == toDoc_id );
+                            //      startComparison = (fromPubId == toPubId );
                             continue;
                         }
-                        //String toDoc_id = fromDoc_id + "EXP";
+                        //String toPubId = fromPubId + "EXP";
                         similarity = -1;
 
-                        if (labelVectors.get(fromDoc_id) != null && labelVectors.get(toDoc_id) != null) {
-                            similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromDoc_id), labelVectors.get(toDoc_id))); // the function returns distance not similarity
+                        if (labelVectors.get(fromPubId) != null && labelVectors.get(toPubId) != null) {
+                            similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromPubId), labelVectors.get(toPubId))); // the function returns distance not similarity
                         }
                         if (similarity > 0.4) {
-                            bulkInsert.setString(1, fromDoc_id);
-                            bulkInsert.setString(2, toDoc_id);
+                            bulkInsert.setString(1, fromPubId);
+                            bulkInsert.setString(2, toPubId);
                             bulkInsert.setDouble(3, (double) Math.round(similarity * 1000) / 1000);
                             bulkInsert.setString(4, experimentId);
                             bulkInsert.executeUpdate();
@@ -1293,24 +1292,24 @@ public class PTMFlow {
             String entityType = "";
             switch (experimentType) {
 //                case Grants:
-//                    sql = "select    GrantId, TopicId, AVG(weight) as Weight from doc_topic Inner Join GrantPerDoc on doc_topic.Doc_id= GrantPerDoc.DocId"
+//                    sql = "select    GrantId, TopicId, AVG(weight) as Weight from PubTopic Inner Join GrantPerDoc on PubTopic.PubId= GrantPerDoc.DocId"
 //                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By GrantId , TopicId order by  GrantId   , TopicId";
 //                    break;
 //                case FullGrants:
-//                    sql = "select    project_code, TopicId, AVG(weight) as Weight from doc_topic Inner Join links  on doc_topic.Doc_id= links.OriginalId "
+//                    sql = "select    project_code, TopicId, AVG(weight) as Weight from PubTopic Inner Join links  on PubTopic.PubId= links.OriginalId "
 //                            + " where weight>0.02 AND ExperimentId='" + experimentId
 //                            + "' group By project_code , TopicId order by  project_code, TopicId";
 //
 //                    break;
 //                case FETGrants:
-//                    sql = "select    project_code, TopicId, AVG(weight) as Weight from doc_topic Inner Join links  on doc_topic.Doc_id= links.OriginalId "
+//                    sql = "select    project_code, TopicId, AVG(weight) as Weight from PubTopic Inner Join links  on PubTopic.PubId= links.OriginalId "
 //                            + "   inner join projectView on links.project_code=projectView.GrantId and links.funder='FP7'  and Category1<>'NONFET'\n"
 //                            + " where weight>0.02 AND ExperimentId='" + experimentId
 //                            + "' group By project_code , TopicId order by  project_code, TopicId";
 //
 //                    break;
                 case OpenAIRE:
-                case PubMed:
+                case HEALTHTender:
                 case HEALTHTenderPM:
                     entityType = "Project";
                     sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
@@ -1318,13 +1317,13 @@ public class PTMFlow {
                             + "                                                        where EntityTopicDistribution.EntityType='Project' \n"
                             + "                                                        AND EntityTopicDistribution.experimentId= '" + experimentId + "'    \n"
                             + "                                                        AND EntityTopicDistribution.EntityId<>'' and EntityTopicDistribution.NormWeight>0.03\n"
-                            + "                                                        and EntityTopicDistribution.EntityId in (Select ProjectId FROM Doc_Project GROUP BY ProjectId HAVING Count(*)>4)\n";
+                            + "                                                        and EntityTopicDistribution.EntityId in (Select ProjectId FROM PubProject GROUP BY ProjectId HAVING Count(*)>4)\n";
 //"                                                        and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n" +
 //"                                                        where topicdescription.experimentId='" + experimentId + "'  and topicdescription.VisibilityIndex>1)";
 
                     break;
 //                case Authors:
-//                    sql = "select    AuthorId, TopicId, AVG(weight) as Weight from doc_topic Inner Join AuthorPerDoc on doc_topic.Doc_id= AuthorPerDoc.DocId"
+//                    sql = "select    AuthorId, TopicId, AVG(weight) as Weight from PubTopic Inner Join AuthorPerDoc on PubTopic.PubId= AuthorPerDoc.DocId"
 //                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By AuthorId , TopicId order by  AuthorId   , TopicId";
 //                    break;
                 case ACM:
@@ -1370,7 +1369,7 @@ public class PTMFlow {
 //
 //                    break;
 //                case DBLP:
-//                    sql = "select  Source, TopicId, AVG(weight) as Weight from doc_topic Inner Join prlinks on doc_topic.Doc_id= prlinks.source"
+//                    sql = "select  Source, TopicId, AVG(weight) as Weight from PubTopic Inner Join prlinks on PubTopic.PubId= prlinks.source"
 //                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By Source , TopicId order by  Source   , TopicId";
 //
 //                    break;
@@ -1401,7 +1400,7 @@ public class PTMFlow {
 
                     case OpenAIRE:
                     case OAFETGrants:
-                    case PubMed:
+                    case HEALTHTender:
                     case HEALTHTenderPM:
                         newLabelId = rs.getString("projectId");
                         break;
@@ -1563,7 +1562,7 @@ public class PTMFlow {
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
             pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
 
-            if (m == 1 && experimentType == ExperimentType.PubMed || experimentType == ExperimentType.HEALTHTenderPM) //keywords
+            if (m == 1 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM) //keywords
             {
                 //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
@@ -1583,9 +1582,9 @@ public class PTMFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+            String txtsql = "select pubviewtxt.pubId, text, fulltext from pubviewtxt " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
-            if (experimentType == ExperimentType.PubMed) {
+            if (experimentType == ExperimentType.HEALTHTender) {
                 txtsql = "select distinct on (pubviewtxt.pubId) pubviewtxt.pubId, text, fulltext from pubviewtxt"
                         + " LEFT JOIN pubproject on pubproject.pubId = pubviewtxt.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
@@ -1607,19 +1606,19 @@ public class PTMFlow {
             if (experimentType == ExperimentType.ACM) {
 
                 if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  docid,  authors, citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  pubId,  authors, citations, categories, period, keywords, venue, DBPediaResources from pubview  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.OneWay) {
 
-                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewoneway " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  pubId, authors, citations, categories, keywords, venue, DBPediaResources from pubviewtwoway " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
                 }
 
             } else if (experimentType == ExperimentType.OpenAIRE) {
                 sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo" + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
-            } else if (experimentType == ExperimentType.PubMed) {
+            } else if (experimentType == ExperimentType.HEALTHTender) {
                 sql = " select distinct on (pubviewsideinfo.pubId)   pubviewsideinfo.pubId,  citations,  keywords, meshterms from pubviewsideinfo"
                         + " LEFT JOIN pubproject on pubproject.pubId = pubviewsideinfo.pubId\n"
                         + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
@@ -1652,10 +1651,10 @@ public class PTMFlow {
 
                     case ACM:
                     case OpenAIRE:
-                    case PubMed:
+                    case HEALTHTender:
                     case HEALTHTenderPM:
                         txt = rstxt.getString("text");
-                        instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("docid"), "text"));
+                        instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("pubId"), "text"));
 
                         break;
 
@@ -1682,7 +1681,7 @@ public class PTMFlow {
                             if (numModalities > 1) {
                                 String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
                                 if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
-                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "Keywords"));
+                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("pubId"), "Keywords"));
                                 }
                             }
 
@@ -1690,7 +1689,7 @@ public class PTMFlow {
                                 String tmpStr = rs.getString("Categories");//.replace("\t", ",");
                                 if (tmpStr != null && !tmpStr.equals("")) {
 
-                                    instanceBuffer.get(2).add(new Instance(tmpStr, null, rs.getString("docid"), "category"));
+                                    instanceBuffer.get(2).add(new Instance(tmpStr, null, rs.getString("pubId"), "category"));
                                 }
                             }
 
@@ -1698,7 +1697,7 @@ public class PTMFlow {
                                 String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
                                 if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
 
-                                    instanceBuffer.get(3).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "Venue"));
+                                    instanceBuffer.get(3).add(new Instance(tmpAuthorsStr, null, rs.getString("pubId"), "Venue"));
                                 }
                             }
 
@@ -1719,7 +1718,7 @@ public class PTMFlow {
                                         }
                                     }
                                     citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("docid"), "citation"));
+                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("pubId"), "citation"));
                                 }
                             }
 
@@ -1741,7 +1740,7 @@ public class PTMFlow {
                                         }
                                     }
                                     DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(5).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResource"));
+                                    instanceBuffer.get(5).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
                                 }
                             }
 
@@ -1749,7 +1748,7 @@ public class PTMFlow {
                                 String tmpAuthorsStr = rs.getString("Authors");//.replace("\t", ",");
                                 if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
 
-                                    instanceBuffer.get(6).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "author"));
+                                    instanceBuffer.get(6).add(new Instance(tmpAuthorsStr, null, rs.getString("pubId"), "author"));
                                 }
                             }
 
@@ -1757,13 +1756,13 @@ public class PTMFlow {
                                 String tmpPeriod = rs.getString("Period");//.replace("\t", ",");
                                 if (tmpPeriod != null && !tmpPeriod.equals("")) {
 
-                                    instanceBuffer.get(7).add(new Instance(tmpPeriod, null, rs.getString("docid"), "period"));
+                                    instanceBuffer.get(7).add(new Instance(tmpPeriod, null, rs.getString("pubId"), "period"));
                                 }
                             }
 
                             break;
                         case OpenAIRE:
-                        case PubMed:
+                        case HEALTHTender:
                         case HEALTHTenderPM:
                             if (numModalities > 1) {
                                 String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
@@ -1796,7 +1795,7 @@ public class PTMFlow {
                                         }
                                     }
                                     citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("docId"), "citation"));
+                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("pubId"), "citation"));
                                 }
                             }
 
@@ -1808,13 +1807,13 @@ public class PTMFlow {
                 }
             }
 
-            if (numModalities > 3 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.PubMed || experimentType == ExperimentType.HEALTHTenderPM)) {
+            if (numModalities > 3 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) {
                 logger.info(" Getting DBpedia annotations from the database");
                 // get txt data 
                 Statement dbPediastatement = connection.createStatement();
                 dbPediastatement.setFetchSize(10000);
                 String SQLquery = "select   pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia";
-                if (experimentType == ExperimentType.PubMed) {
+                if (experimentType == ExperimentType.HEALTHTender) {
                     SQLquery = "select distinct on (pubviewdbpedia.pubId)    pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia"
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
@@ -1855,13 +1854,13 @@ public class PTMFlow {
                 }
             }
 
-            if (numModalities > 5 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.PubMed || experimentType == ExperimentType.HEALTHTenderPM)) {
+            if (numModalities > 5 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) {
                 logger.info(" Getting funding info from the database");
                 // get txt data 
                 Statement dbfundingstatement = connection.createStatement();
                 dbfundingstatement.setFetchSize(10000);
                 String SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding ";
-                if (experimentType == ExperimentType.PubMed) {
+                if (experimentType == ExperimentType.HEALTHTender) {
                     SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding "
                             + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
                             + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
@@ -1875,7 +1874,7 @@ public class PTMFlow {
                     String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
                     if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
 
-                        instanceBuffer.get(5).add(new Instance(tmpFundingStr, null, rs.getString("docId"), "Funding"));
+                        instanceBuffer.get(5).add(new Instance(tmpFundingStr, null, rs.getString("pubId"), "Funding"));
                     }
 
                 }
@@ -1962,7 +1961,7 @@ public class PTMFlow {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed || experimentType == ExperimentType.HEALTHTenderPM)) ? prCnt * 2 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.HEALTHTender || experimentType == ExperimentType.HEALTHTenderPM)) ? prCnt * 2 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
@@ -2020,15 +2019,15 @@ public class PTMFlow {
             statement.executeUpdate(deleteSQL);
 
             statement = connection.createStatement();
-            statement.executeUpdate("create table if not exists PubAuthor (Doc_id nvarchar(50), AuthorId nvarchar(50)) ");
+            statement.executeUpdate("create table if not exists PubAuthor (PubId nvarchar(50), AuthorId nvarchar(50)) ");
             deleteSQL = String.format("Delete from PubAuthor ");
             statement.executeUpdate(deleteSQL);
 
-            statement.executeUpdate("create table if not exists PubCitation (Doc_id nvarchar(50), CitationId nvarchar(50)) ");
+            statement.executeUpdate("create table if not exists PubCitation (PubId nvarchar(50), CitationId nvarchar(50)) ");
             deleteSQL = String.format("Delete from PubCitation ");
             statement.executeUpdate(deleteSQL);
 
-            statement.executeUpdate("create table if not exists PubCategory (Doc_id nvarchar(50), Category TEXT) ");
+            statement.executeUpdate("create table if not exists PubCategory (PubId nvarchar(50), Category TEXT) ");
             deleteSQL = String.format("Delete from PubCategory ");
             statement.executeUpdate(deleteSQL);
 

@@ -1,4 +1,4 @@
-        package org.madgik.MVTopicModel;
+package org.madgik.MVTopicModel;
 
 import cc.mallet.types.*;
 import cc.mallet.pipe.*;
@@ -98,9 +98,7 @@ public class D4IPTMFlow {
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" + numModalities + "M_" + (trainTypeVectors ? "WV" : "") + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
-
-        String experimentDetails = String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f pruneLblCntPerc:%.4f burnIn:%d numOfThreads:%d similarityType:%s", this.pruneMaxPerc, pruneCntPerc, pruneLblCntPerc, burnIn, numOfThreads, similarityType.toString());
+                + numIterations + "IT_" + numChars + "CHRs_" + String.format("%.1f_%.4f_%.4f", pruneMaxPerc, pruneCntPerc, pruneLblCntPerc) + "PRN_" + burnIn + "B_" + numModalities + "M_" + numOfThreads + "TH_" + similarityType.toString() + (trainTypeVectors ? "WV" : "")+((limitDocs>0)?("Lmt_"+limitDocs):"") + PPRenabled.name();
 
         String experimentDescription = experimentString + ": \n";
 
@@ -183,7 +181,7 @@ public class D4IPTMFlow {
             model.estimate();
             logger.info("Model estimated");
 
-            model.saveResults(SQLConnectionString, experimentId,batchId, experimentDetails);
+            model.saveResults(SQLConnectionString, experimentId,batchId);
             logger.info("Model saved");
             
             logger.info("Model Id: \n" + experimentId);

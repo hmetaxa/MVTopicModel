@@ -2764,7 +2764,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
             }
             PreparedStatement bulkInsert = null;
-            String sql = "insert into PubTopic values(?,?,?,?,?, ? );";
+            String sql = "insert into PubTopic values(?,?,?,?,? );";
 
             try {
                 connection.setAutoCommit(false);
@@ -2832,7 +2832,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                             bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);
                             bulkInsert.setString(4, batchId);
                             bulkInsert.setString(5, experimentId);
-                            bulkInsert.setBoolean(6, true);
                             bulkInsert.executeUpdate();
 
                         }
@@ -2901,7 +2900,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 statement = connection.createStatement();
                 // statement.executeUpdate("drop table if exists PubTopic");
                 //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                statement.executeUpdate(String.format("Delete from doc_topics where  ExperimentId = '%s'", experimentId));
+                statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
 
                 //statement.executeUpdate("create table if not exists Experiment (ExperimentId nvarchar(50), Description nvarchar(200), Metadata nvarchar(500), InitialSimilarity Double, PhraseBoost Integer) ");
                 String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
