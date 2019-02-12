@@ -1440,7 +1440,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    public void saveResults(String SQLConnectionString, String experimentId, String batchId, String description) {
+    public void saveResults(String SQLConnectionString, String experimentId,  String description) {
 
         saveTopics(SQLConnectionString, experimentId, batchId);
         logger.info("Topics Saved");
@@ -1449,7 +1449,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
         double docTopicsThreshold = 0.03;
         int docTopicsMax = -1;
-        printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLConnectionString, experimentId, batchId);
+        printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLConnectionString, experimentId);
         logger.info("Topics per Doc Saved");
 
         saveExperiment(SQLConnectionString, experimentId, description);
@@ -2729,7 +2729,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //        }
     }
 
-    public void printDocumentTopics(PrintWriter out, double threshold, int max, String SQLConnectionString, String experimentId, String batchId) {
+    public void printDocumentTopics(PrintWriter out, double threshold, int max, String SQLConnectionString, String experimentId) {
         if (out != null) {
             out.print("#doc name topic proportion ...\n");
         }
@@ -2759,12 +2759,10 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                // statement.executeUpdate("drop table if exists PubTopic");
-                //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                //statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
+                
             }
             PreparedStatement bulkInsert = null;
-            String sql = "insert into PubTopic values(?,?,?,?,?, ? );";
+            String sql = "insert into doc_topic values(?,?,?,?,?);";
 
             try {
                 connection.setAutoCommit(false);
@@ -2826,13 +2824,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         }
 
                         if (!SQLConnectionString.isEmpty()) {
-                            //  sql += String.format(Locale.ENGLISH, "insert into PubTopic values('%s',%d,%.4f,'%s' );", docId, sortedTopics[i].getID(), sortedTopics[i].getWeight(), experimentId);
+                            
                             bulkInsert.setString(1, docId);
                             bulkInsert.setInt(2, sortedTopics[i].getID());
-                            bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);
-                            bulkInsert.setString(4, batchId);
-                            bulkInsert.setString(5, experimentId);
-                            bulkInsert.setBoolean(6, true);
+                            bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);                            
+                            bulkInsert.setString(4, experimentId);
+                            bulkInsert.setBoolean(5, true);
                             bulkInsert.executeUpdate();
 
                         }
@@ -2899,29 +2896,26 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                // statement.executeUpdate("drop table if exists PubTopic");
-                //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                statement.executeUpdate(String.format("Delete from doc_topics where  ExperimentId = '%s'", experimentId));
+                
+                
+                statement.executeUpdate(String.format("Delete from doc_topic where  ExperimentId = '%s'", experimentId));
 
-                //statement.executeUpdate("create table if not exists Experiment (ExperimentId nvarchar(50), Description nvarchar(200), Metadata nvarchar(500), InitialSimilarity Double, PhraseBoost Integer) ");
+                
                 String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                //statement.executeUpdate("create table if not exists TopicDetails (TopicId integer, ItemType integer,  Weight double, TotalTokens int, BatchId TEXT,ExperimentId nvarchar(50)) ");
+                
                 deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
                 deleteSQL = String.format("Delete from TopicDescription where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                //statement.executeUpdate("create table if not exists TopicAnalysis (TopicId integer, ItemType integer, Item nvarchar(100), Counts double,  BatchId TEXT, ExperimentId nvarchar(50)) ");
+                
                 deleteSQL = String.format("Delete from TopicAnalysis where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                //statement.executeUpdate("create table if not exists PubTopic (PubId nvarchar(50), TopicId Integer, Weight Double , BatchId Text, ExperimentId nvarchar(50)) ");
-                statement.executeUpdate(String.format("Delete from PubTopic where  ExperimentId = '%s'", experimentId));
-
-                //statement.executeUpdate("create table if not exists ExpDiagnostics (ExperimentId text, BatchId text, EntityId text, EntityType int, ScoreName text, Score double )");
+                
                 deleteSQL = String.format("Delete from ExpDiagnostics where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
             }

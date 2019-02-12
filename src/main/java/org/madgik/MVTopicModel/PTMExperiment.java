@@ -301,7 +301,7 @@ public class PTMExperiment {
 
                 PrintWriter outState = null;// new PrintWriter(new FileWriter((new File(outputDocTopicsFile))));
 
-                model.printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLLitedb, experimentId, batchId);
+                model.printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLLitedb, experimentId);
 
                 if (outState != null) {
                     outState.close();

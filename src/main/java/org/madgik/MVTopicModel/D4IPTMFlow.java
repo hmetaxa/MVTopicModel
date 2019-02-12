@@ -183,7 +183,7 @@ public class D4IPTMFlow {
             model.estimate();
             logger.info("Model estimated");
 
-            model.saveResults(SQLConnectionString, experimentId,batchId, experimentDetails);
+            model.saveResults(SQLConnectionString, experimentId, experimentDetails);
             logger.info("Model saved");
             
             logger.info("Model Id: \n" + experimentId);
