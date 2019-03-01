@@ -24,18 +24,13 @@ import org.madgik.utils.CSV2FeatureSequence;
 import org.madgik.utils.FeatureSequenceRemovePlural;
 import static org.madgik.utils.Utils.cosineSimilarity;
 
-public class PTMFlow {
+public class SciTopicFlow {
 
     public enum ExperimentType {
 
         ACM,
-        OpenAIRE,
-        OAFETGrants,
-        PubMed,
-        HEALTHTenderPM,
-        LFR,
-        DBLP,
-        DBLPNetOnly
+        PubMed
+
     }
 
     public enum SimilarityType {
@@ -52,7 +47,7 @@ public class PTMFlow {
         PPR
     }
 
-    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
+    public static Logger logger = Logger.getLogger(SciTopicFlow.class.getName());
 
     int topWords = 20;
     int showTopicsInterval = 50;
@@ -64,7 +59,7 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.ACM;
+    ExperimentType experimentType = ExperimentType.PubMed;
 
     double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
@@ -88,11 +83,11 @@ public class PTMFlow {
     String previousModelFile = "";
     int limitDocs = 10000;
 
-    public PTMFlow() throws IOException {
+    public SciTopicFlow() throws IOException {
         this(null);
     }
 
-    public PTMFlow(Map<String, String> runtimeProp) throws IOException {
+    public SciTopicFlow(Map<String, String> runtimeProp) throws IOException {
 
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
 
@@ -125,7 +120,7 @@ public class PTMFlow {
             logger.info(" calc word embeddings starting");
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
                     pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly, limitDocs);
+                    false, limitDocs);
 
             logger.info(" instances added through pipe");
 
@@ -152,7 +147,7 @@ public class PTMFlow {
             String batchId = "-1";
             InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
                     pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    experimentType == ExperimentType.LFR || experimentType == ExperimentType.DBLP || experimentType == ExperimentType.DBLPNetOnly, limitDocs);
+                    false, limitDocs);
             logger.info("Instances added through pipe");
 
             double beta = 0.01;
@@ -187,7 +182,7 @@ public class PTMFlow {
             model.estimate();
             logger.info("Model estimated");
 
-            model.saveResults(SQLConnectionString, experimentId,  experimentDetails);
+            model.saveResults(SQLConnectionString, experimentId, experimentDetails);
             logger.info("Model saved");
 
             logger.info("Model Id: \n" + experimentId);
@@ -205,12 +200,6 @@ public class PTMFlow {
             } catch (Exception e) {
 
                 logger.error(e.getMessage());
-            }
-
-            //experimentDescription = "Multi View Topic Modeling Analysis";
-            //model.saveExperiment(SQLConnectionString, experimentId, experimentDescription);
-            if (experimentType == ExperimentType.LFR) {
-                FindGroundTruthCommunities(SQLConnectionString, experimentId);
             }
 
         }
@@ -800,28 +789,26 @@ public class PTMFlow {
 
             statement.executeUpdate(SQLstr);
 
-           
-
             statement.executeUpdate(SQLstr);
 
             if (experimentType == ExperimentType.ACM) {
 
-                 logger.info("Trend Topic distribution for the whole coprus");
+                logger.info("Trend Topic distribution for the whole coprus");
 
-            SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
-                    + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                    + "from doc_topic\n"
-                    + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                    + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                    + "FROM doc_topic\n"
-                    + "INNER JOIN Document ON doc_topic.docid= Document.docid AND\n"
-                    + "doc_topic.weight>0.1\n "
-                    + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                    + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                    + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                    + "Order by Document.BatchId,   NormWeight Desc";
-            
+                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                        + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
+                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
+                        + "from doc_topic\n"
+                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
+                        + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
+                        + "FROM doc_topic\n"
+                        + "INNER JOIN Document ON doc_topic.docid= Document.docid AND\n"
+                        + "doc_topic.weight>0.1\n "
+                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
+                        + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
+                        + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
+                        + "Order by Document.BatchId,   NormWeight Desc";
+
                 logger.info("Author Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
@@ -924,23 +911,23 @@ public class PTMFlow {
             }
 
             if (experimentType == ExperimentType.PubMed) {
-                
-                 logger.info("Trend Topic distribution for the whole coprus");
 
-            SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
-                    + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                    + "from doc_topic\n"
-                    + "Inner Join Document on doc_topic.docid= document.id and doc_topic.weight>0.1\n"
-                    + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                    + "FROM doc_topic\n"
-                    + "INNER JOIN Document ON doc_topic.docid= Document.id AND\n"
-                    + "doc_topic.weight>0.1\n "
-                    + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                    + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                    + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                    + "Order by Document.BatchId,   NormWeight Desc";
-            
+                logger.info("Trend Topic distribution for the whole coprus");
+
+                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                        + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
+                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
+                        + "from doc_topic\n"
+                        + "Inner Join Document on doc_topic.docid= document.id and doc_topic.weight>0.1\n"
+                        + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
+                        + "FROM doc_topic\n"
+                        + "INNER JOIN Document ON doc_topic.docid= Document.id AND\n"
+                        + "doc_topic.weight>0.1\n "
+                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
+                        + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
+                        + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
+                        + "Order by Document.BatchId,   NormWeight Desc";
+
                 logger.info("Project Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
@@ -1266,135 +1253,7 @@ public class PTMFlow {
         logger.info("Pub citation similarities calculation finished");
     }
 
-    public void FindGroundTruthCommunities(String SQLConnectionString, String experimentId) {
-        //calc similarities
-
-        //logger.info("PPRSimilarities calculation Started");
-        Connection connection = null;
-        try {
-            // create a database connection
-            //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLConnectionString);
-            Statement statement = connection.createStatement();
-
-            logger.info("PPRSimilarities calculation Started");
-
-            String sql = "select TopicId||'EXP' as GroupId, Doc_id as NodeId from doc_topic\n"
-                    + "WHERE ExperimentId = '" + experimentId + "'\n"
-                    + "UNION \n"
-                    + "Select  GroupId,NodeId from GroundTruth\n"
-                    + "Order By GroupId";
-
-            ResultSet rs = statement.executeQuery(sql);
-
-            HashMap<String, SparseVector> labelVectors = null;
-            //HashMap<String, double[]> similarityVectors = null;
-            labelVectors = new HashMap<String, SparseVector>();
-
-            String labelId = "";
-
-            int[] citations = new int[30000];
-            double[] weights = new double[30000];
-            int cnt = 0;
-
-            while (rs.next()) {
-
-                String newLabelId = "";
-                newLabelId = rs.getString("GroupId");
-                if (!newLabelId.equals(labelId) && !labelId.isEmpty()) {
-                    labelVectors.put(labelId, new SparseVector(citations, weights, citations.length, citations.length, true, true, true));
-                    citations = new int[30000];
-                    weights = new double[30000];
-                    cnt = 0;
-                }
-                labelId = newLabelId;
-                citations[cnt] = rs.getInt("NodeId");
-                weights[cnt] = 1; // rs.getDouble("Counts");
-                cnt++;
-
-            }
-
-            cnt = 0;
-            double similarity = 0;
-
-            NormalizedDotProductMetric cosineSimilarity = new NormalizedDotProductMetric();
-
-            statement.executeUpdate("create table if not exists GroundTruth2TopicId (Community TEXT,  TopicId TEXT, Similarity double, ExperimentId TEXT) ");
-            String deleteSQL = String.format("Delete from GroundTruth2TopicId WHERE ExperimentId='" + experimentId + "'");
-            statement.executeUpdate(deleteSQL);
-
-            PreparedStatement bulkInsert = null;
-            sql = "insert into GroundTruth2TopicId values(?,?,?,?);";
-
-            try {
-
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(sql);
-
-                for (String fromDoc_id : labelVectors.keySet()) {
-                    //boolean startComparison = false;
-                    for (String toDoc_id : labelVectors.keySet()) {
-
-                        if (fromDoc_id.contains("EXP") || !toDoc_id.contains("EXP")) {
-                            //if (! startComparison) {
-                            //      startComparison = (fromDoc_id == toDoc_id );
-                            continue;
-                        }
-                        //String toDoc_id = fromDoc_id + "EXP";
-                        similarity = -1;
-
-                        if (labelVectors.get(fromDoc_id) != null && labelVectors.get(toDoc_id) != null) {
-                            similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromDoc_id), labelVectors.get(toDoc_id))); // the function returns distance not similarity
-                        }
-                        if (similarity > 0.4) {
-                            bulkInsert.setString(1, fromDoc_id);
-                            bulkInsert.setString(2, toDoc_id);
-                            bulkInsert.setDouble(3, (double) Math.round(similarity * 1000) / 1000);
-                            bulkInsert.setString(4, experimentId);
-                            bulkInsert.executeUpdate();
-                        }
-
-                    }
-                }
-
-                connection.commit();
-
-            } catch (SQLException e) {
-
-                if (connection != null) {
-                    try {
-                        logger.error("Transaction is being rolled back");
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        logger.error("Error in insert grantSimilarity");
-                    }
-                }
-            } finally {
-
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e);
-            }
-        }
-
-        logger.info("Pub citation similarities calculation finished");
-    }
-
+  
     public void calcSimilarities(String SQLConnectionString, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
         //calc similarities
 
@@ -1409,26 +1268,8 @@ public class PTMFlow {
             String sql = "";
             String entityType = "";
             switch (experimentType) {
-//                case Grants:
-//                    sql = "select    GrantId, TopicId, AVG(weight) as Weight from doc_topic Inner Join GrantPerDoc on doc_topic.Doc_id= GrantPerDoc.DocId"
-//                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By GrantId , TopicId order by  GrantId   , TopicId";
-//                    break;
-//                case FullGrants:
-//                    sql = "select    project_code, TopicId, AVG(weight) as Weight from doc_topic Inner Join links  on doc_topic.Doc_id= links.OriginalId "
-//                            + " where weight>0.02 AND ExperimentId='" + experimentId
-//                            + "' group By project_code , TopicId order by  project_code, TopicId";
-//
-//                    break;
-//                case FETGrants:
-//                    sql = "select    project_code, TopicId, AVG(weight) as Weight from doc_topic Inner Join links  on doc_topic.Doc_id= links.OriginalId "
-//                            + "   inner join projectView on links.project_code=projectView.GrantId and links.funder='FP7'  and Category1<>'NONFET'\n"
-//                            + " where weight>0.02 AND ExperimentId='" + experimentId
-//                            + "' group By project_code , TopicId order by  project_code, TopicId";
-//
-//                    break;
-                case OpenAIRE:
+
                 case PubMed:
-                case HEALTHTenderPM:
                     entityType = "Project";
                     sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
                             + "                                                        from EntityTopicDistribution                                                        \n"
@@ -1436,14 +1277,8 @@ public class PTMFlow {
                             + "                                                        AND EntityTopicDistribution.experimentId= '" + experimentId + "'    \n"
                             + "                                                        AND EntityTopicDistribution.EntityId<>'' and EntityTopicDistribution.NormWeight>0.03\n"
                             + "                                                        and EntityTopicDistribution.EntityId in (Select ProjectId FROM Doc_Project GROUP BY ProjectId HAVING Count(*)>4)\n";
-//"                                                        and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n" +
-//"                                                        where topicdescription.experimentId='" + experimentId + "'  and topicdescription.VisibilityIndex>1)";
 
                     break;
-//                case Authors:
-//                    sql = "select    AuthorId, TopicId, AVG(weight) as Weight from doc_topic Inner Join AuthorPerDoc on doc_topic.Doc_id= AuthorPerDoc.DocId"
-//                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By AuthorId , TopicId order by  AuthorId   , TopicId";
-//                    break;
                 case ACM:
                     if (ACMAuthorSimilarity) {
                         entityType = "Author";
@@ -1455,12 +1290,6 @@ public class PTMFlow {
                                 + "                            and EntityTopicDistribution.topicid in (select TopicId from topic \n"
                                 + "                            where topic.experimentId='" + experimentId + "' and topic.VisibilityIndex>0)";
 
-//                        sql = "select TopicDistributionPerAuthorView.AuthorId, TopicDistributionPerAuthorView.TopicId, TopicDistributionPerAuthorView.NormWeight as Weight \n"
-//                                + "from TopicDistributionPerAuthorView\n"
-//                                + "where TopicDistributionPerAuthorView.experimentId='" + experimentId + "'   and TopicDistributionPerAuthorView.NormWeight>0.03\n"
-//                                + "and TopicDistributionPerAuthorView.AuthorId in (Select AuthorId FROM PubAuthor GROUP BY AuthorId HAVING Count(*)>4)\n"
-//                                + "and TopicDistributionPerAuthorView.topicid in (select TopicId from topicdescription \n"
-//                                + "where topicdescription.experimentId='" + experimentId + "' and topicdescription.VisibilityIndex>1)";
                     } else {
                         entityType = "JournalConference";
                         sql = "select EntityTopicDistribution.EntityId as VenueId, EntityTopicDistribution.TopicId  as TopicId, EntityTopicDistribution.NormWeight as Weight \n"
@@ -1481,16 +1310,6 @@ public class PTMFlow {
                     }
 
                     break;
-//                case PM_pdb:
-//                    sql = "select    pdbCode, TopicId, AVG(weight) as Weight from topicsPerDoc Inner Join pdblink on topicsPerDoc.DocId= pdblink.pmcId"
-//                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By pdbCode , TopicId order by  pdbCode   , TopicId";
-//
-//                    break;
-//                case DBLP:
-//                    sql = "select  Source, TopicId, AVG(weight) as Weight from doc_topic Inner Join prlinks on doc_topic.Doc_id= prlinks.source"
-//                            + " where weight>0.02 AND ExperimentId='" + experimentId + "' group By Source , TopicId order by  Source   , TopicId";
-//
-//                    break;
                 default:
             }
 
@@ -1516,10 +1335,7 @@ public class PTMFlow {
 
                 switch (experimentType) {
 
-                    case OpenAIRE:
-                    case OAFETGrants:
                     case PubMed:
-                    case HEALTHTenderPM:
                         newLabelId = rs.getString("projectId");
                         break;
 
@@ -1680,7 +1496,7 @@ public class PTMFlow {
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
             pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
 
-            if (m == 1 && experimentType == ExperimentType.PubMed || experimentType == ExperimentType.HEALTHTenderPM) //keywords
+            if (m == 1 && experimentType == ExperimentType.PubMed ) //keywords
             {
                 //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
@@ -1707,16 +1523,6 @@ public class PTMFlow {
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
             }
 
-            if (experimentType == ExperimentType.HEALTHTenderPM) {
-                txtsql = "select distinct on (pmpubviewtxt.pubId) pmpubviewtxt.pubId, text from pmpubviewtxt"
-                        + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewtxt.pubId\n"
-                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                        + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewtxt.pubId \n"
-                        + "                         WHERE ((pmpubviewtxt.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewtxt.pubyear>='2004'"
-                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                //+ " LIMIT 1000";
-            }
-
             if (experimentType == ExperimentType.ACM) {
 
                 if (PPRenabled == Net2BoWType.PPR) {
@@ -1729,20 +1535,8 @@ public class PTMFlow {
 
                 }
 
-            } else if (experimentType == ExperimentType.OpenAIRE) {
-                sql = " select   pubviewsideinfo.pubId,  citations,  keywords from pubviewsideinfo" + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
             } else if (experimentType == ExperimentType.PubMed) {
                 sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where batchid > '2005' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");;
-
-            } else if (experimentType == ExperimentType.HEALTHTenderPM) {
-                sql = " select distinct on (pmpubviewsideinfo.pubId)   pmpubviewsideinfo.pubId,  citations,  keywords, meshterms from pmpubviewsideinfo"
-                        + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewsideinfo.pubId\n"
-                        + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                        + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewsideinfo.pubId \n"
-                        + "                         WHERE ((pmpubviewsideinfo.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%') or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewsideinfo.pubyear>='2004'"
-                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                //+ " LIMIT 1000";
 
             }
 
@@ -1759,9 +1553,7 @@ public class PTMFlow {
                 switch (experimentType) {
 
                     case ACM:
-                    case OpenAIRE:
                     case PubMed:
-                    case HEALTHTenderPM:
                         txt = rstxt.getString("text");
                         instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("docid"), "text"));
 
@@ -1884,8 +1676,8 @@ public class PTMFlow {
                                     instanceBuffer.get(2).add(new Instance(tmpMeshTermsStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "MeshTerms"));
                                 }
                             }
-                            
-                              if (numModalities > 3) {
+
+                            if (numModalities > 3) {
                                 String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
                                 String DBPediaResourceStr = "";
                                 if (tmpStr != null && !tmpStr.equals("")) {
@@ -1905,44 +1697,6 @@ public class PTMFlow {
                                     instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResources"));
                                 }
                             }
-                            
-                            break;
-                        case OpenAIRE:
-                        case HEALTHTenderPM:
-                            if (numModalities > 1) {
-                                String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
-                                if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
-                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("pubId"), "Keywords"));
-                                }
-                            }
-
-                            if (numModalities > 2) {
-                                String tmpMeshTermsStr = rs.getString("meshterms");//.replace("\t", ",");
-                                if (tmpMeshTermsStr != null && !tmpMeshTermsStr.equals("")) {
-                                    instanceBuffer.get(2).add(new Instance(tmpMeshTermsStr.replace('-', ' ').toLowerCase(), null, rs.getString("pubId"), "MeshTerms"));
-                                }
-                            }
-
-                            if (numModalities > 4) {
-                                String tmpStr = rs.getString("Citations");//.replace("\t", ",");
-                                String citationStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] citations = tmpStr.trim().split(",");
-                                    for (int j = 0; j < citations.length; j++) {
-                                        String[] pairs = citations[j].trim().split(":");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                citationStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            citationStr += citations[j] + ",";
-
-                                        }
-                                    }
-                                    citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("docId"), "citation"));
-                                }
-                            }
 
                             break;
 
@@ -1952,79 +1706,7 @@ public class PTMFlow {
                 }
             }
 
-            if (numModalities > 3 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTenderPM)) {
-                logger.info(" Getting DBpedia annotations from the database");
-                // get txt data 
-                Statement dbPediastatement = connection.createStatement();
-                dbPediastatement.setFetchSize(10000);
-                String SQLquery = "select   pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia";
-                if (experimentType == ExperimentType.PubMed) {
-                    SQLquery = "select distinct on (pubviewdbpedia.pubId)    pubviewdbpedia.pubId,  DBPediaResources from pubviewdbpedia"
-                            + " LEFT JOIN pubproject on pubproject.pubId = pubviewdbpedia.pubId\n"
-                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                            + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewdbpedia.pubId \n"
-                            + "                         WHERE ((pubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewdbpedia.pubyear>='2004'";//+ " LIMIT 10000";
-
-                }
-                if (experimentType == ExperimentType.HEALTHTenderPM) {
-                    SQLquery = "select distinct on (pmpubviewdbpedia.pubId)    pmpubviewdbpedia.pubId,  DBPediaResources from pmpubviewdbpedia"
-                            + " LEFT JOIN pubproject on pubproject.pubId = pmpubviewdbpedia.pubId\n"
-                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                            + "                         LEFT JOIN pubfunder on pubfunder.pubId = pmpubviewdbpedia.pubId \n"
-                            + "                         WHERE ((pmpubviewdbpedia.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pmpubviewdbpedia.pubyear>='2004'";
-                    // + " LIMIT 1000";
-
-                }
-                ResultSet rs = txtstatement.executeQuery(SQLquery);
-
-                while (rs.next()) {
-                    String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
-                    String DBPediaResourceStr = "";
-                    if (tmpStr != null && !tmpStr.equals("")) {
-                        String[] DBPediaResources = tmpStr.trim().split(",");
-                        for (int j = 0; j < DBPediaResources.length; j++) {
-                            String[] pairs = DBPediaResources[j].trim().split(";");
-                            if (pairs.length == 2) {
-                                for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                    DBPediaResourceStr += pairs[0] + ",";
-                                }
-                            } else {
-                                DBPediaResourceStr += DBPediaResources[j] + ",";
-
-                            }
-                        }
-                        DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                        instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("pubId"), "DBPediaResource"));
-                    }
-                }
-            }
-
-            if (numModalities > 5 && (experimentType == ExperimentType.OpenAIRE || experimentType == ExperimentType.HEALTHTenderPM)) {
-                logger.info(" Getting funding info from the database");
-                // get txt data 
-                Statement dbfundingstatement = connection.createStatement();
-                dbfundingstatement.setFetchSize(10000);
-                String SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding ";
-                if (experimentType == ExperimentType.PubMed) {
-                    SQLquery = "select   pubviewfunding.pubId,  fundings from pubviewfunding "
-                            + " LEFT JOIN pubproject on pubproject.pubId = pubviewfunding.pubId\n"
-                            + "                         LEFT JOIN project on pubproject.projectid = project.projectid  \n"
-                            + "                         INNER JOIN pubfunder on pubfunder.pubId = pubviewfunding.pubId \n"
-                            + "                         WHERE ((pubviewfunding.referenceid like 'PMC%') or (project.fundinglevel2='FP7-HEALTH') or (project.fundinglevel2 like 'H2020-EU.3.1%')  or (project.funder IN ('SRC','Vinnova', 'Formas', 'WT', 'NIH'))) and  pubviewfunding.pubyear>='2004'";//+ " LIMIT 10000";
-                }
-                ResultSet rs = txtstatement.executeQuery(SQLquery);
-
-                while (rs.next()) {
-
-                    String tmpFundingStr = rs.getString("Fundings");//.replace("\t", ",");
-                    if (tmpFundingStr != null && !tmpFundingStr.equals("")) {
-
-                        instanceBuffer.get(5).add(new Instance(tmpFundingStr, null, rs.getString("docId"), "Funding"));
-                    }
-
-                }
-            }
-
+          
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
@@ -2071,7 +1753,7 @@ public class PTMFlow {
 
         // pruning for all other modalities no text
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
-            if (pruneLblCntPerc > 0) {
+            if (pruneLblCntPerc > 0 & instances[m].size()>10) {
 
                 // Check which type of data element the instances contain
                 Instance firstInstance = instances[m].get(0);
@@ -2106,7 +1788,7 @@ public class PTMFlow {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed || experimentType == ExperimentType.HEALTHTenderPM)) ? prCnt * 2 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed )) ? prCnt * 2 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
@@ -2142,224 +1824,12 @@ public class PTMFlow {
 
     }
 
-    public void createRefACMTables(String SQLConnectionString) {
-        //String SQLConnectionString = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
-
-        Connection connection = null;
-        try {
-
-            connection = DriverManager.getConnection(SQLConnectionString);
-
-            Statement statement = connection.createStatement();
-            statement.executeUpdate("create table if not exists Author (AuthorId nvarchar(50), FirstName nvarchar(50), LastName nvarchar(50), MiddleName nvarchar(10), Affilication TEXT) ");
-            String deleteSQL = String.format("Delete from Author ");
-            statement.executeUpdate(deleteSQL);
-
-            statement.executeUpdate("create table if not exists Citation (CitationId nvarchar(50), Reference TEXT) ");
-            deleteSQL = String.format("Delete from Citation ");
-            statement.executeUpdate(deleteSQL);
-
-            statement.executeUpdate("create table if not exists Category (Category TEXT) ");
-            deleteSQL = String.format("Delete from Category ");
-            statement.executeUpdate(deleteSQL);
-
-            statement = connection.createStatement();
-            statement.executeUpdate("create table if not exists PubAuthor (Doc_id nvarchar(50), AuthorId nvarchar(50)) ");
-            deleteSQL = String.format("Delete from PubAuthor ");
-            statement.executeUpdate(deleteSQL);
-
-            statement.executeUpdate("create table if not exists PubCitation (Doc_id nvarchar(50), CitationId nvarchar(50)) ");
-            deleteSQL = String.format("Delete from PubCitation ");
-            statement.executeUpdate(deleteSQL);
-
-            statement.executeUpdate("create table if not exists PubCategory (Doc_id nvarchar(50), Category TEXT) ");
-            deleteSQL = String.format("Delete from PubCategory ");
-            statement.executeUpdate(deleteSQL);
-
-            PreparedStatement authorBulkInsert = null;
-            PreparedStatement citationBulkInsert = null;
-            PreparedStatement categoryBulkInsert = null;
-
-            PreparedStatement pubAuthorBulkInsert = null;
-            PreparedStatement pubCitationBulkInsert = null;
-            PreparedStatement pubCategoryBulkInsert = null;
-
-            String authorInsertsql = "insert into Author values(?,?,?,?,?);";
-            String citationInsertsql = "insert into Citation values(?,?);";
-            String categoryInsertsql = "insert into Category values(?);";
-
-            String pubAuthorInsertsql = "insert into pubAuthor values(?,?);";
-            String pubCitationInsertsql = "insert into pubCitation values(?,?);";
-            String pubCategoryInsertsql = "insert into pubCategory values(?,?);";
-
-            TObjectIntHashMap<String> authorsLst = new TObjectIntHashMap<String>();
-            TObjectIntHashMap<String> citationsLst = new TObjectIntHashMap<String>();
-            TObjectIntHashMap<String> categorysLst = new TObjectIntHashMap<String>();
-
-            try {
-
-                connection.setAutoCommit(false);
-                authorBulkInsert = connection.prepareStatement(authorInsertsql);
-                citationBulkInsert = connection.prepareStatement(citationInsertsql);
-                categoryBulkInsert = connection.prepareStatement(categoryInsertsql);
-
-                pubAuthorBulkInsert = connection.prepareStatement(pubAuthorInsertsql);
-                pubCitationBulkInsert = connection.prepareStatement(pubCitationInsertsql);
-                pubCategoryBulkInsert = connection.prepareStatement(pubCategoryInsertsql);
-
-                String sql = "	Select articleid,authors_id,authors_firstname,authors_lastname,authors_middlename,authors_affiliation,authors_role, \n"
-                        + "			ref_objid,reftext,primarycategory,othercategory \n"
-                        + "			 from ACMData1 \n";
-                // + "			  LIMIT 10";
-
-                ResultSet rs = statement.executeQuery(sql);
-
-                while (rs.next()) {
-                    // read the result set
-                    String Id = rs.getString("articleid");
-
-                    String authorIdsStr = rs.getString("authors_id");
-                    String[] authorIds = authorIdsStr.split("\t");
-
-                    String authors_firstnamesStr = rs.getString("authors_firstname");
-                    String[] authors_firstnames = authors_firstnamesStr.split("\t");
-
-                    String authors_lastnamesStr = rs.getString("authors_lastname");
-                    String[] authors_lastnames = authors_lastnamesStr.split("\t");
-
-                    String authors_middlenamesStr = rs.getString("authors_middlename");
-                    String[] authors_middlenames = authors_middlenamesStr.split("\t");
-
-                    String authors_affiliationsStr = rs.getString("authors_affiliation");
-                    String[] authors_affiliations = authors_affiliationsStr.split("\t");
-
-                    for (int i = 0; i < authorIds.length - 1; i++) {
-                        String authorId = authorIds[i];
-                        if (!authorsLst.containsKey(authorId)) {
-                            authorsLst.put(authorId, 1);
-                            String lstName = authors_lastnames.length - 1 > i ? authors_lastnames[i] : "";
-                            String fstName = authors_firstnames.length - 1 > i ? authors_firstnames[i] : "";
-                            String mName = authors_middlenames.length - 1 > i ? authors_middlenames[i] : "";
-                            String affiliation = authors_affiliations.length - 1 > i ? authors_affiliations[i] : "";
-
-                            authorBulkInsert.setString(1, authorId);
-                            authorBulkInsert.setString(2, lstName);
-                            authorBulkInsert.setString(3, fstName);
-                            authorBulkInsert.setString(4, mName);
-                            authorBulkInsert.setString(5, affiliation);
-                            authorBulkInsert.executeUpdate();
-                        }
-                        pubAuthorBulkInsert.setString(1, Id);
-                        pubAuthorBulkInsert.setString(2, authorId);
-                        pubAuthorBulkInsert.executeUpdate();
-
-                    }
-
-                    String citationIdsStr = rs.getString("ref_objid");
-                    String[] citationIds = citationIdsStr.split("\t");
-
-                    String citationsStr = rs.getString("reftext");
-                    String[] citations = citationsStr.split("\t");
-
-                    for (int i = 0; i < citationIds.length - 1; i++) {
-                        String citationId = citationIds[i];
-                        if (!citationsLst.containsKey(citationId)) {
-                            citationsLst.put(citationId, 1);
-                            String ref = citations.length - 1 > i ? citations[i] : "";
-
-                            citationBulkInsert.setString(1, citationId);
-                            citationBulkInsert.setString(2, ref);
-                            citationBulkInsert.executeUpdate();
-                        }
-                        pubCitationBulkInsert.setString(1, Id);
-                        pubCitationBulkInsert.setString(2, citationId);
-                        pubCitationBulkInsert.executeUpdate();
-                    }
-
-                    String prCategoriesStr = rs.getString("primarycategory");
-                    String[] prCategories = prCategoriesStr.split("\t");
-
-                    String categoriesStr = rs.getString("othercategory");
-                    String[] categories = categoriesStr.split("\t");
-
-                    for (int i = 0; i < prCategories.length - 1; i++) {
-                        String category = prCategories[i];
-                        if (!categorysLst.containsKey(category)) {
-                            categorysLst.put(category, 1);
-                            categoryBulkInsert.setString(1, category);
-                            categoryBulkInsert.executeUpdate();
-                        }
-                        pubCategoryBulkInsert.setString(1, Id);
-                        pubCategoryBulkInsert.setString(2, category);
-                        pubCategoryBulkInsert.executeUpdate();
-                    }
-
-                    for (int i = 0; i < categories.length - 1; i++) {
-                        String category = categories[i];
-                        if (!categorysLst.containsKey(category)) {
-                            categorysLst.put(category, 1);
-                            categoryBulkInsert.setString(1, category);
-                            categoryBulkInsert.executeUpdate();
-                        }
-
-                        pubCategoryBulkInsert.setString(1, Id);
-                        pubCategoryBulkInsert.setString(2, category);
-                        pubCategoryBulkInsert.executeUpdate();
-                    }
-
-                }
-
-                connection.commit();
-
-            } catch (SQLException e) {
-
-                logger.error("Error in creatingrefACMTables: " + e.getMessage());
-                if (connection != null) {
-                    try {
-                        logger.error("Transaction is being rolled back");
-
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        logger.error("Error in ACMReferences extraction" + excep);
-                    }
-                }
-            } finally {
-
-                if (authorBulkInsert != null) {
-                    authorBulkInsert.close();
-                }
-                if (categoryBulkInsert != null) {
-                    categoryBulkInsert.close();
-                }
-                if (citationBulkInsert != null) {
-                    citationBulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-        } catch (Exception e) {
-            logger.error("File input error: " + e);
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e);
-            }
-        }
-
-    }
+ 
 
     public static void main(String[] args) throws Exception {
         Class.forName("org.postgresql.Driver");
         //Class.forName("org.sqlite.JDBC");
-        PTMFlow trainer = new PTMFlow();
+        SciTopicFlow trainer = new SciTopicFlow();
 
     }
 }

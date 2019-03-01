@@ -1463,9 +1463,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         Connection connection = null;
         try {
 
-            String insertTopicDescriptionSql = "INSERT into TopicDescription (Title, Category, TopicId , VisibilityIndex, ExperimentId )\n"
+            String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
                     + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
-                    + "from  TopicDescriptionView\n"
+                    + "from  Topic_View\n"
                     + " where experimentID = '" + experimentId + "' \n"
                     + " GROUP BY TopicID";
 
@@ -2908,7 +2908,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                deleteSQL = String.format("Delete from TopicDescription where  ExperimentId = '%s'", experimentId);
+                deleteSQL = String.format("Delete from Topic where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
                 
