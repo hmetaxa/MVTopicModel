@@ -222,7 +222,7 @@ public class DBpediaAnnotator {
 
         Connection connection = null;
 
-        int queueSize = 20000;
+        int queueSize = 8000;
 
         BlockingQueue<pubText> pubsQueue = new ArrayBlockingQueue<pubText>(queueSize);
 

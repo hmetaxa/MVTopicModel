@@ -88,33 +88,81 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
     }
 
+    public String getMeSHLabelById(String meshId) {
+
+        String response = "";
+        String label = "";
+
+        try {
+            String searchUrl = "https://id.nlm.nih.gov/mesh/" + meshId + ".json";
+            //+ "query=" + URLEncoder.encode(query, "utf-8")
+            //+ "&format=json";
+
+            GetMethod getMethod = new GetMethod(searchUrl);
+
+            //getMethod.addRequestHeader(new Header("Accept", "application/json"));
+            response = request(getMethod);
+
+        } catch (Exception e) {
+            logger.error("Invalid response from MeSH API:" + e);
+            //throw new Exception("Received invalid response from DBpedia Spotlight API.");
+
+        }
+
+        assert response != null;
+
+        JSONObject resultJSON = null;
+        
+
+        try {
+            resultJSON = new JSONObject(response);
+            label = resultJSON.getJSONArray("@graph").getJSONObject(0).getJSONObject("label").getString("@value");
+
+        } catch (JSONException e) {
+            logger.error("Invalid JSON response from dbpedia API:" + e);
+
+        }
+
+        return label;
+    }
+
     public void getAndUpdateDetails(String resourceURI) {
 
         String response = "";
 
         String query = "prefix dbpedia-owl: <http://dbpedia.org/ontology/>\n"
-                + "prefix dcterms: <http://purl.org/dc/terms/>                              \n"
+                + "				prefix dcterms: <http://purl.org/dc/terms/>                              \n"
                 + "                \n"
-                + "                                 SELECT  ?label ?subject ?subjectLabel ?redirect ?redirectLabel ?disambiguates ?disambiguatesLabel ?abstract\n"
+                + "                                 SELECT  ?label ?subject ?subjectLabel ?redirect ?redirectLabel ?disambiguates ?disambiguatesLabel \n"
+                + "					 ?abstract ?type ?typeLabel ?meshId ?icd10 \n"
                 + "                                 WHERE {\n"
                 + "                                     ?uri dbpedia-owl:abstract ?abstract .\n"
                 + "                                     ?uri rdfs:label ?label .\n"
-                + "OPTIONAL{\n"
+                + "                                     ?uri rdf:type ?type .\n"
+                + "                                     ?type rdfs:label ?typeLabel .\n"
+                + "				OPTIONAL{\n"
+                + "                                     ?uri dbo:meshId ?meshId .\n"
+                + "				}\n"
+                + "				OPTIONAL{\n"
+                + "                                     ?uri dbo:icd10 ?icd10 .\n"
+                + "  				}\n"
+                + "				OPTIONAL{\n"
                 + "                                     ?uri dcterms:subject ?subject.\n"
                 + "                                     ?subject rdfs:label ?subjectLabel .\n"
-                + "}\n"
-                + "OPTIONAL{\n"
+                + "				}\n"
+                + "				OPTIONAL{\n"
                 + "                                     ?disambiguates  dbpedia-owl:wikiPageDisambiguates  ?uri .\n"
                 + "                                     ?disambiguates rdfs:label ?disambiguatesLabel.\n"
-                + "}\n"
-                + "OPTIONAL{\n"
+                + "				}\n"
+                + "				OPTIONAL{\n"
                 + "                                     ?redirect dbpedia-owl:wikiPageRedirects ?uri .                    \n"
                 + "                                     ?redirect rdfs:label ?redirectLabel .\n"
-                + "}\n"
+                + "				}\n"
                 + "                                     FILTER (?uri = <" + resourceURI + "> && langMatches(lang(?label),\"en\")  \n"
                 + "                                             && langMatches(lang(?abstract),\"en\") && langMatches(lang(?disambiguatesLabel),\"en\")\n"
-                + "                                            && langMatches(lang(?redirectLabel ),\"en\") && langMatches(lang(?subjectLabel ),\"en\") )         \n"
-                + "                                   \n"
+                + "                                            && langMatches(lang(?redirectLabel ),\"en\") && langMatches(lang(?subjectLabel ),\"en\")\n"
+                + "                                            && langMatches(lang(?typeLabel ),\"en\") && langMatches(lang(?typeLabel ),\"en\")\n"
+                + "                                            && strstarts(str(?type), \"http://dbpedia.org/ontology/\"))  \n"
                 + "                                 }";
 
         try {
@@ -149,11 +197,23 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         if (entities != null) {
             Set<DBpediaLink> categories = new HashSet<DBpediaLink>();
             Set<DBpediaLink> abreviations = new HashSet<DBpediaLink>();
+            Set<DBpediaLink> types = new HashSet<DBpediaLink>();
             String resourceAbstract = "";
             String label = "";
+            String icd10 = "";
+            String meshId = "";
+            String mesh = "";
+
             for (int i = 0; i < entities.length(); i++) {
                 try {
                     JSONObject entity = entities.getJSONObject(i);
+
+                    try {
+                        types.add(new DBpediaLink(entity.getJSONObject("type").getString("value"), entity.getJSONObject("typeLabel").getString("value")));
+                    } catch (JSONException e) {
+                        logger.debug("JSON parsing types not found:" + e);
+
+                    }
 
                     try {
                         categories.add(new DBpediaLink(entity.getJSONObject("subject").getString("value"), entity.getJSONObject("subjectLabel").getString("value")));
@@ -161,6 +221,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                         logger.debug("JSON parsing categories not found:" + e);
 
                     }
+
                     try {
                         String redirectLabel = entity.getJSONObject("redirectLabel").getString("value");
 
@@ -180,9 +241,26 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                         logger.debug("JSON parsing disambiguatesLabel not found:" + e);
 
                     }
+
                     if (i == 0) {
                         resourceAbstract = entity.getJSONObject("abstract").getString("value");
                         label = entity.getJSONObject("label").getString("value");
+
+                        try {
+                            icd10 = entity.getJSONObject("icd10").getString("value");
+                        } catch (JSONException e) {
+                            logger.debug("JSON parsing icd10not found:" + e);
+                        }
+
+                        try {
+                            meshId = entity.getJSONObject("meshId").getString("value");
+                            if (!meshId.isEmpty()) {
+                                mesh = getMeSHLabelById(meshId);
+                            }
+                            //TODO: Get MeshLabel (Heading) via https://id.nlm.nih.gov/mesh/D020246.json 
+                        } catch (JSONException e) {
+                            logger.debug("JSON parsing meshId found:" + e);
+                        }
                     }
 
                 } catch (JSONException e) {
@@ -194,7 +272,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
             //public DBpediaResource(DBpediaResourceType type, String URI, String title, int support,  double Similarity, double confidence, String mention, List<String> categories, String wikiAbstract, String wikiId) {
             saveResourceDetails(new DBpediaResource(DBpediaResourceType.Entity, resourceURI, label, 0, 1,
-                    1, "", categories, resourceAbstract, "", abreviations));
+                    1, "", categories, resourceAbstract, "", abreviations, types, meshId, mesh, icd10));
         }
     }
 
@@ -249,7 +327,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 //public DBpediaResource(DBpediaResourceType type, String URI, String title, int support,  double Similarity, double confidence, String mention, List<String> categories, String wikiAbstract, String wikiId) {
                 resources.add(
                         new DBpediaResource(DBpediaResourceType.Entity, entity.getString("@URI"), "", Integer.parseInt(entity.getString("@support")), Double.parseDouble(entity.getString("@similarityScore")),
-                                1, entity.getString("@surfaceForm"), null, "", "", null));
+                                1, entity.getString("@surfaceForm"), null, "", "", null, null, "", "", ""));
 
             } catch (JSONException e) {
                 logger.error(String.format("Invalid response -no details- from DBpedia Spotlight API for resource %s: %s", entity.toString(), e));
@@ -323,7 +401,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 }
                 //public DBpediaResource(DBpediaResourceType type, String URI, String title, int support,  double Similarity, double confidence, String mention, List<String> categories, String wikiAbstract, String wikiId) {
                 DBpediaResource newResource = new DBpediaResource(DBpediaResourceType.Entity, "", entity.getString("title"), 0, entity.getDouble("link_probability"),
-                        entity.getDouble("rho"), entity.getString("spot"), categories, entity.getString("abstract"), String.valueOf(entity.getInt("id")), null);
+                        entity.getDouble("rho"), entity.getString("spot"), categories, entity.getString("abstract"), String.valueOf(entity.getInt("id")), null, null, null, null, null);
 
                 resources.add(newResource);
 
@@ -549,7 +627,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             //Statement statement = connection.createStatement();
 
             //INSERT OR IGNORE INTO EVENTTYPE (EventTypeName) VALUES 'ANI Received'
-            String myStatement = " insert into DBpediaResource (Id, URI, label, wikiId, abstract) Values (?, ?, ?, ?, ?) ON CONFLICT (Id) DO NOTHING ";
+            String myStatement = " insert into DBpediaResource (Id, URI, label, wikiId, abstract, icd10, mesh, meshid) Values (?, ?, ?, ?, ?,?,?,?) ON CONFLICT (Id) DO NOTHING ";
             PreparedStatement statement = connection.prepareStatement(myStatement);
             String id = resource.getLink().uri.isEmpty() ? resource.getLink().label : resource.getLink().uri;
 
@@ -558,6 +636,9 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             statement.setString(3, resource.getLink().label);
             statement.setString(4, resource.getWikiId());
             statement.setString(5, resource.getWikiAbstract());
+            statement.setString(6, resource.getIcd10());
+            statement.setString(7, resource.getMesh());
+            statement.setString(8, resource.getMeshId());
             int result = statement.executeUpdate();
 
             if (result > 0) {
@@ -566,6 +647,10 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 deletestatement.executeUpdate();
 
                 deletestatement = connection.prepareStatement("Delete from DBpediaResourceAcronym where ResourceId=?");
+                deletestatement.setString(1, id);
+                deletestatement.executeUpdate();
+
+                deletestatement = connection.prepareStatement("Delete from DBpediaResourceType where ResourceId=?");
                 deletestatement.setString(1, id);
                 deletestatement.executeUpdate();
 
@@ -641,6 +726,41 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                     connection.setAutoCommit(true);
                 }
 
+                insertSql = "insert into DBpediaResourceType (resourceid, typelabel, typeuri) values (?,?, ?)";
+
+                try {
+
+                    connection.setAutoCommit(false);
+                    bulkInsert = connection.prepareStatement(insertSql);
+                    for (DBpediaLink type : resource.getTypes()) {
+                        bulkInsert.setString(1, id);
+                        bulkInsert.setString(2, type.label);
+                        bulkInsert.setString(3, type.uri);
+                        bulkInsert.executeUpdate();
+
+                    }
+
+                    connection.commit();
+
+                } catch (SQLException e) {
+
+                    if (connection != null) {
+                        try {
+                            logger.error("Transaction is being rolled back:" + e.toString());
+                            connection.rollback();
+                            connection.setAutoCommit(true);
+                        } catch (SQLException excep) {
+                            logger.error("Error in insert DBpediaResource Type:" + excep.toString());
+                        }
+                    }
+                } finally {
+
+                    if (bulkInsert != null) {
+                        bulkInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                }
+
             }
         } catch (SQLException e) {
             // if the error message is "out of memory", 
@@ -685,7 +805,7 @@ public class DBpediaAnnotatorRunnable implements Runnable {
                 i++;
                 txt2Annotate += (" " + s);
 
-                if ((i % 5) == 0 || i == txts.length) {
+                if ((i % 10) == 0 || i == txts.length - 1) {
                     txt2AnnotatNum++;
 
                     try {

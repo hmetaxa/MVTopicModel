@@ -17,12 +17,11 @@ class DBpediaLink {
     public String label;
     public String uri;
 
-    public DBpediaLink(String uri,String label)
-    {
+    public DBpediaLink(String uri, String label) {
         this.label = label;
         this.uri = uri;
     }
-            
+
     @Override
     public boolean equals(Object obj) {
         if (obj == this) {
@@ -55,9 +54,13 @@ public class DBpediaResource {
     private double confidence;
     private String wikiAbstract;
     private String wikiId;
+    private String meshId;
+    private String mesh;
+    private String icd10;
     private Set<DBpediaLink> categories;
+    private Set<DBpediaLink> types;
 
-     @Override
+    @Override
     public boolean equals(Object obj) {
         if (obj == this) {
             return true;
@@ -73,20 +76,25 @@ public class DBpediaResource {
     public int hashCode() {
         return link.hashCode();
     }
-    
-    public DBpediaResource(DBpediaResourceType type, String URI, String label, int support, double Similarity, double confidence, String mention, Set<DBpediaLink> categories, String wikiAbstract, String wikiId, Set<DBpediaLink> abreviations) {
+
+    public DBpediaResource(DBpediaResourceType type, String URI, String label, int support, double Similarity, double confidence,
+            String mention, Set<DBpediaLink> categories, String wikiAbstract, String wikiId, Set<DBpediaLink> abreviations, Set<DBpediaLink> types, String meshId, String mesh, String icd10) {
         this.link = new DBpediaLink(URI, label);
-        
+
         this.support = support;
         this.type = type;
         this.mention = mention;
         this.similarity = Similarity;
         this.confidence = confidence;
-        
+
         this.categories = categories;
         this.abreviations = abreviations;
         this.wikiAbstract = wikiAbstract;
         this.wikiId = wikiId;
+        this.mesh = mesh;
+        this.meshId = meshId;
+        this.icd10 = icd10;
+        this.types = types;
     }
 
     public Set<DBpediaLink> getCategories() {
@@ -95,6 +103,14 @@ public class DBpediaResource {
 
     public void setCategories(Set<DBpediaLink> categories) {
         this.categories = categories;
+    }
+
+    public Set<DBpediaLink> getTypes() {
+        return types;
+    }
+
+    public void setTypes(Set<DBpediaLink> categories) {
+        this.types = categories;
     }
 
     public Set<DBpediaLink> getAbreviations() {
@@ -168,4 +184,29 @@ public class DBpediaResource {
     public void setSupport(int Support) {
         this.support = Support;
     }
+
+    public String getMeshId() {
+        return meshId;
+    }
+
+    public void setMeshId(String meshId) {
+        this.meshId = meshId;
+    }
+
+    public String getMesh() {
+        return mesh;
+    }
+
+    public void setMesh(String mesh) {
+        this.mesh = mesh;
+    }
+
+    public String getIcd10() {
+        return icd10;
+    }
+
+    public void setIcd10(String icd10) {
+        this.icd10 = icd10;
+    }
+
 }
