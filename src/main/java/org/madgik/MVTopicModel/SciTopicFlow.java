@@ -81,7 +81,8 @@ public class SciTopicFlow {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String experimentId = "";
     String previousModelFile = "";
-    int limitDocs = 10000;
+    int limitDocs = 100000;
+    boolean D4I = true;
 
     public SciTopicFlow() throws IOException {
         this(null);
@@ -1519,8 +1520,22 @@ public class SciTopicFlow {
             String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
             if (experimentType == ExperimentType.PubMed) {
-                txtsql = "select doctxt_view.docId, text, fulltext, batchid from doctxt_view where batchid > '2004'"
+                txtsql = "select doctxt_view.docId, text, fulltext, batchid from doctxt_view where repository = 'PubMed Central' "
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
+                if (D4I)
+                {
+                    txtsql = "select distinct ON (doctxt_view.docId)  doctxt_view.docId, text, fulltext, batchid from doctxt_view \n"
+                            + " LEFT JOIN doc_project on doc_project.docid = doctxt_view.docId\n" +
+"where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n" +
+"and (repository = 'PubMed Central' OR  doc_project.projectid IN \n" +
+"(select projectid from doc_project\n" +
+"join document on doc_project.docid = document.id and repository = 'PubMed Central'\n" +
+"group by projectid\n" +
+"having count(*) > 5) )\n" +
+"Order by doctxt_view.docId \n"
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
+                }
+                
             }
 
             if (experimentType == ExperimentType.ACM) {
@@ -1536,7 +1551,21 @@ public class SciTopicFlow {
                 }
 
             } else if (experimentType == ExperimentType.PubMed) {
-                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where batchid > '2005' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");;
+                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where repository = 'PubMed Central' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                if (D4I)
+                {
+                    sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n" +
+"from docsideinfo_view  \n" +
+"LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n" +
+"where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n" +
+"and (repository = 'PubMed Central' OR  doc_project.projectid IN \n" +
+"(select projectid from doc_project\n" +
+"join document on doc_project.docid = document.id and repository = 'PubMed Central'\n" +
+"group by projectid\n" +
+"having count(*) > 5) )\n" +
+"Order by docsideinfo_view.docId \n"
+                    + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                }
 
             }
 

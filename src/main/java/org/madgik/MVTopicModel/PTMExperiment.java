@@ -296,7 +296,7 @@ public class PTMExperiment {
                 model.estimate();
                 logger.info("Model estimated");
 
-                model.saveTopics(SQLLitedb, experimentId, batchId);
+                model.saveTopics(SQLLitedb, experimentId, batchId, experimentDescription);
                 logger.info("Topics Saved");
 
                 PrintWriter outState = null;// new PrintWriter(new FileWriter((new File(outputDocTopicsFile))));

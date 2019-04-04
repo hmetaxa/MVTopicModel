@@ -12,6 +12,7 @@ import cc.mallet.util.Randoms;
 
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
 
 import java.util.concurrent.CyclicBarrier;
@@ -62,7 +63,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
     protected FTree[][] trees; //store 
     protected Randoms random;
     protected int threadId = -1;
-    protected Queue<FastQDelta> queue;
+    protected BlockingQueue<FastQDelta> queue;
     private final CyclicBarrier cyclicBarrier;
     protected int MHsteps = 1;
     //protected boolean useCycleProposals = false;
@@ -138,7 +139,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
         //				   Integer.toBinaryString(topicMask) + " topic mask");
     }
 
-    public void setQueue(Queue<FastQDelta> queue) {
+    public void setQueue(BlockingQueue<FastQDelta> queue) {
         this.queue = queue;
     }
     
@@ -203,7 +204,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
             shouldSaveState = false;
             //isFinished = true;
             //logger.info("Worker[" + threadId + "] thread finished");
-            queue.add(new FastQDelta(-1, -1, -1, -1, -1, -1));
+            queue.put(new FastQDelta(-1, -1, -1, -1, -1, -1));
 
             try {
                 cyclicBarrier.await();
@@ -572,7 +573,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                     //add delta to the queue
                     if (newTopic != oldTopic) {
                         //queue.add(new FastQDelta(oldTopic, newTopic, type, 0, 1, 1));
-                        queue.add(new FastQDelta(oldTopic, newTopic, type, m, oldTopic == FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC ? 0 : localTopicCounts[m][oldTopic], localTopicCounts[m][newTopic]));
+                        queue.put(new FastQDelta(oldTopic, newTopic, type, m, oldTopic == FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC ? 0 : localTopicCounts[m][oldTopic], localTopicCounts[m][newTopic]));
 //                        if (queue.size()>200)
 //                        {                          
 //                            System.out.println("Thread["+threadId+"] queue size="+queue.size());

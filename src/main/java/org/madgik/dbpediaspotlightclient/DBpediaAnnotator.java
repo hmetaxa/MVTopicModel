@@ -149,7 +149,7 @@ public class DBpediaAnnotator {
             String sql
                     = //"select  URI as Resource from DBpediaResource where Label=''";
                     //optimized query: hashing is much faster than seq scan
-                    "select distinct Resource from doc_dbpediaResource EXCEPT select URI from DBpediaResource ";
+                    "select distinct Resource from doc_dbpediaResource EXCEPT select URI from DBpediaResource";
 
             connection.setAutoCommit(false);
             Statement statement = connection.createStatement();
@@ -222,7 +222,7 @@ public class DBpediaAnnotator {
 
         Connection connection = null;
 
-        int queueSize = 8000;
+        int queueSize = 10000;
 
         BlockingQueue<pubText> pubsQueue = new ArrayBlockingQueue<pubText>(queueSize);
 
@@ -323,7 +323,7 @@ public class DBpediaAnnotator {
         logger.info("DBPedia annotation started");
         c.getPropValues(null);
         logger.info("DBPedia annotation: Annotate new publications");
-        c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
+        //c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
         logger.info("DBPedia annotation: Get extra fields from DBPedia");
         c.updateResourceDetails(ExperimentType.PubMed);
 

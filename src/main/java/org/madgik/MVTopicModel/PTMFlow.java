@@ -64,7 +64,7 @@ public class PTMFlow {
     int numChars = 4000;
     int burnIn = 50;
     int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.ACM;
+    ExperimentType experimentType = ExperimentType.PubMed;
 
     double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)

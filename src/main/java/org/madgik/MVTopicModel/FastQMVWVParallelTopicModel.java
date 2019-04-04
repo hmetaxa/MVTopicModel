@@ -1125,14 +1125,17 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //                queues.add(new LinkedBlockingQueue<FastQDelta>());
 //            }
 //            
-        ExecutorService executor = Executors.newFixedThreadPool(numThreads + 1);
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads + 1);        
 
-        for (int iteration = 1; iteration <= numIterations; iteration++) {
+        for (int iteration = 1; iteration <= numIterations; iteration++) {            
 
-            List<Queue<FastQDelta>> queues = new ArrayList<Queue<FastQDelta>>(numThreads);
+            List<BlockingQueue<FastQDelta>> queues = new ArrayList<BlockingQueue<FastQDelta>>(numThreads);
+            int queueSize = 10000; //control stallness 
+            
             for (int thread = 0; thread < numThreads; thread++) {
                 //queues.add(new ConcurrentLinkedQueue<FastQDelta>());
 
+                //new LinkedBlockingQueue<FastQDelta>()
                 queues.add(new LinkedBlockingQueue<FastQDelta>());
             }
 
@@ -1440,9 +1443,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
     }
 
-    public void saveResults(String SQLConnectionString, String experimentId,  String description) {
+    public void saveResults(String SQLConnectionString, String experimentId, String description) {
 
-        saveTopics(SQLConnectionString, experimentId, batchId);
+        saveTopics(SQLConnectionString, experimentId, batchId, description);
         logger.info("Topics Saved");
 
         PrintWriter outState = null;// new PrintWriter(new FileWriter((new File(outputDocTopicsFile))));
@@ -1452,47 +1455,18 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         printDocumentTopics(outState, docTopicsThreshold, docTopicsMax, SQLConnectionString, experimentId);
         logger.info("Topics per Doc Saved");
 
-        saveExperiment(SQLConnectionString, experimentId, description);
+        //saveExperiment(SQLConnectionString, experimentId, description);
 
-        logger.info("Experiment Details Saved");
+        //logger.info("Experiment Details Saved");
 
         if (trainTypeVectors) {
             matrix.save(SQLConnectionString, "word", experimentId);
             logger.info("Vectors Saved");
         }
-        Connection connection = null;
-        try {
-
-            String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
-                    + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
-                    + "from  Topic_View\n"
-                    + " where experimentID = '" + experimentId + "' \n"
-                    + " GROUP BY TopicID";
-
-            connection = DriverManager.getConnection(SQLConnectionString);
-            Statement statement = connection.createStatement();
-            statement.executeUpdate(insertTopicDescriptionSql);
-            //ResultSet rs = statement.executeQuery(sql);
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e);
-            }
-        }
-        logger.info("Default topic descriptions inserted");
 
     }
 
-    public void saveTopics(String SQLConnectionString, String experimentId, String batchId) {
+    public void saveTopics(String SQLConnectionString, String experimentId, String batchId, String experimentDescription) {
 
         Connection connection = null;
         Statement statement = null;
@@ -1500,57 +1474,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             // create a database connection
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
-                statement = connection.createStatement();
+                
 
-                //statement.executeUpdate("create table if not exists TopicDetails (TopicId integer, ItemType integer,  Weight double, TotalTokens int, BatchId TEXT,ExperimentId nvarchar(50)) ");
-                //String deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
-                //statement.executeUpdate(deleteSQL);
-                String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
-                PreparedStatement bulkTopicDetailInsert = null;
-
-                try {
-                    connection.setAutoCommit(false);
-                    bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
-
-                    for (int topic = 0; topic < numTopics; topic++) {
-                        for (Byte m = 0; m < numModalities; m++) {
-
-                            bulkTopicDetailInsert.setInt(1, topic);
-                            bulkTopicDetailInsert.setInt(2, m);
-                            bulkTopicDetailInsert.setDouble(3, alpha[m][topic]);
-                            bulkTopicDetailInsert.setInt(4, tokensPerTopic[m][topic]);
-                            bulkTopicDetailInsert.setString(5, batchId);
-                            bulkTopicDetailInsert.setString(6, experimentId);
-
-                            bulkTopicDetailInsert.executeUpdate();
-                        }
-                    }
-
-                    connection.commit();
-
-                } catch (SQLException e) {
-                    System.err.println(e.getMessage());
-
-                    if (connection != null) {
-                        try {
-                            System.err.print("Transaction is being rolled back");
-                            connection.rollback();
-                        } catch (SQLException excep) {
-                            System.err.print("Error in insert topic details");
-                        }
-                    }
-                } finally {
-
-                    if (bulkTopicDetailInsert != null) {
-                        bulkTopicDetailInsert.close();
-                    }
-                    connection.setAutoCommit(true);
-                }
-
-                //statement.executeUpdate("drop table if exists TopicAnalysis");
-                //statement.executeUpdate("create table if not exists TopicAnalysis (TopicId integer, ItemType integer, Item nvarchar(100), Counts double,  BatchId TEXT, ExperimentId nvarchar(50)) ");
-                //deleteSQL = String.format("Delete from TopicAnalysis where  ExperimentId = '%s'", experimentId);
-                //statement.executeUpdate(deleteSQL);
                 PreparedStatement bulkInsert = null;
                 String sql = "insert into TopicAnalysis values(?,?,?,?,?,?);";
 
@@ -1635,6 +1560,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //                    }
                 } catch (SQLException e) {
 
+                    logger.error(e.getMessage());
                     System.err.print(e.getMessage());
                     if (connection != null) {
                         try {
@@ -1652,6 +1578,146 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                     connection.setAutoCommit(true);
                 }
             }
+
+            statement = connection.createStatement();
+            String boostSelect = String.format("select  \n"
+                        + " a.experimentid, PhraseCnts, textcnts, textcnts/phrasecnts as boost\n"
+                        + "from \n"
+                        + "(select experimentid, itemtype, avg(counts) as PhraseCnts from topicanalysis\n"
+                        + "where itemtype=-1\n"
+                        + "group by experimentid, itemtype) a inner join\n"
+                        + "(select experimentid, itemtype, avg(counts) as textcnts from topicanalysis\n"
+                        + "where itemtype=0  and ExperimentId = '%s' \n"
+                        + "group by experimentid, itemtype) b on a.experimentId=b.experimentId\n"
+                        + "order by a.experimentId;", experimentId);
+                float boost = 70;
+                ResultSet rs = statement.executeQuery(boostSelect);
+                while (rs.next()) {
+                    boost = rs.getFloat("boost");
+                }
+
+//                String similaritySelect = String.format("select experimentid, avg(avgent) as avgSimilarity, avg(counts) as avgLinks, count(*) as EntitiesCnt\n"
+//                        + "from( \n"
+//                        + "select experimentid, avg(similarity) as avgent, count(similarity) as counts\n"
+//                        + "from entitysimilarity\n"
+//                        + "where similarity>0.65 and ExperimentId = '%s' group by experimentid, entityid1)\n"
+//                        + "group by experimentid", experimentId);
+                PreparedStatement bulkInsert = null;
+                String sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost, ended) values(?,?,?, ?, ?,? );";
+
+                try {
+                    connection.setAutoCommit(false);
+                    bulkInsert = connection.prepareStatement(sql);
+
+                    bulkInsert.setString(1, experimentId);
+                    bulkInsert.setString(2, experimentDescription);
+                    bulkInsert.setString(3, expMetadata.toString());
+                    bulkInsert.setDouble(4, 0.6);
+                    bulkInsert.setInt(5, Math.round(boost));
+
+                    //Date date = 
+                    LocalDateTime now = LocalDateTime.now();
+                    Timestamp timestamp = Timestamp.valueOf(now);
+
+                    bulkInsert.setTimestamp(6, timestamp);
+
+                    bulkInsert.executeUpdate();
+
+                    connection.commit();
+
+                } catch (SQLException e) {
+
+                    System.err.println(e.getMessage());
+                    if (connection != null) {
+                        try {
+
+                            System.err.print("Transaction is being rolled back");
+                            connection.rollback();
+                        } catch (SQLException excep) {
+                            System.err.print("Error in insert experiment details");
+                        }
+                    }
+                } finally {
+
+                    if (bulkInsert != null) {
+                        bulkInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                }
+            
+            try {
+
+                String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
+                        + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
+                        + "from  Topic_View\n"
+                        + " where experimentID = '" + experimentId + "' \n"
+                        + " GROUP BY TopicID";
+
+                connection = DriverManager.getConnection(SQLConnectionString);
+                statement = connection.createStatement();
+                statement.executeUpdate(insertTopicDescriptionSql);
+                //ResultSet rs = statement.executeQuery(sql);
+
+            } catch (SQLException e) {
+                // if the error message is "out of memory", 
+                // it probably means no database file is found
+                logger.error(e.getMessage());
+            } 
+            
+            finally {
+                /*try {
+                    if (connection != null) {
+                        connection.close();
+                    }
+                } catch (SQLException e) {
+                    // connection close failed.
+                    logger.error(e);
+                }
+                */
+            }
+
+            String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
+            PreparedStatement bulkTopicDetailInsert = null;
+
+            try {
+                connection.setAutoCommit(false);
+                bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
+
+                for (int topic = 0; topic < numTopics; topic++) {
+                    for (Byte m = 0; m < numModalities; m++) {
+
+                        bulkTopicDetailInsert.setInt(1, topic);
+                        bulkTopicDetailInsert.setInt(2, m);
+                        bulkTopicDetailInsert.setDouble(3, alpha[m][topic]);
+                        bulkTopicDetailInsert.setInt(4, tokensPerTopic[m][topic]);
+                        bulkTopicDetailInsert.setString(5, batchId);
+                        bulkTopicDetailInsert.setString(6, experimentId);
+
+                        bulkTopicDetailInsert.executeUpdate();
+                    }
+                }
+
+                connection.commit();
+
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+
+                if (connection != null) {
+                    try {
+                        System.err.print("Transaction is being rolled back");
+                        connection.rollback();
+                    } catch (SQLException excep) {
+                        System.err.print("Error in insert topic details");
+                    }
+                }
+            } finally {
+
+                if (bulkTopicDetailInsert != null) {
+                    bulkTopicDetailInsert.close();
+                }
+                connection.setAutoCommit(true);
+            }
+
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
@@ -2759,7 +2825,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                
+
             }
             PreparedStatement bulkInsert = null;
             String sql = "insert into doc_topic values(?,?,?,?,?);";
@@ -2824,10 +2890,10 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                         }
 
                         if (!SQLConnectionString.isEmpty()) {
-                            
+
                             bulkInsert.setString(1, docId);
                             bulkInsert.setInt(2, sortedTopics[i].getID());
-                            bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);                            
+                            bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);
                             bulkInsert.setString(4, experimentId);
                             bulkInsert.setBoolean(5, true);
                             bulkInsert.executeUpdate();
@@ -2896,26 +2962,21 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             if (!SQLConnectionString.isEmpty()) {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
-                
-                
+
                 statement.executeUpdate(String.format("Delete from doc_topic where  ExperimentId = '%s'", experimentId));
 
-                
                 String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                
                 deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
                 deleteSQL = String.format("Delete from Topic where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                
                 deleteSQL = String.format("Delete from TopicAnalysis where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
 
-                
                 deleteSQL = String.format("Delete from ExpDiagnostics where  ExperimentId = '%s'", experimentId);
                 statement.executeUpdate(deleteSQL);
             }

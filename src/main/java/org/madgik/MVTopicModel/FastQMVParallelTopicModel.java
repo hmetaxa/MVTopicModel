@@ -1041,7 +1041,8 @@ public class FastQMVParallelTopicModel implements Serializable {
 
         for (int iteration = 1; iteration <= numIterations; iteration++) {
 
-            List<Queue<FastQDelta>> queues = new ArrayList<Queue<FastQDelta>>(numThreads);
+            //List<Queue<FastQDelta>> queues = new ArrayList<Queue<FastQDelta>>(numThreads);
+            List<BlockingQueue<FastQDelta>> queues = new ArrayList<BlockingQueue<FastQDelta>>(numThreads);
             for (int thread = 0; thread < numThreads; thread++) {
                 //queues.add(new ConcurrentLinkedQueue<FastQDelta>());
 

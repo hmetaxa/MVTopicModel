@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
@@ -32,7 +33,7 @@ public class FastQMVUpdaterRunnable implements Runnable {
     protected int[][][] typeTopicCounts; // indexed by <feature index, topic index>
     protected int[][] tokensPerTopic; // indexed by <topic index>
     protected FTree[][] trees; //store 
-    protected List<Queue<FastQDelta>> queues;
+    protected List<BlockingQueue<FastQDelta>> queues;
     protected double[][] alpha;	 // Dirichlet(alpha,alpha,...) is the distribution over topics
     protected double[] alphaSum;
     protected double[] beta;   // Prior on per-topic multinomial distribution over words
@@ -129,7 +130,7 @@ public class FastQMVUpdaterRunnable implements Runnable {
     }
 
     
-    public void setQueues(List<Queue<FastQDelta>> queues) {
+    public void setQueues(List<BlockingQueue<FastQDelta>> queues) {
         this.queues = queues;
     }
 
