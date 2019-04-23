@@ -130,41 +130,52 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
         String response = "";
 
-        String query = "prefix dbpedia-owl: <http://dbpedia.org/ontology/>\n"
-                + "				prefix dcterms: <http://purl.org/dc/terms/>                              \n"
-                + "                \n"
-                + "                                 SELECT  ?label ?subject ?subjectLabel ?redirect ?redirectLabel ?disambiguates ?disambiguatesLabel \n"
-                + "					 ?abstract ?type ?typeLabel ?meshId ?icd10 \n"
-                + "                                 WHERE {\n"
-                + "                                     ?uri dbpedia-owl:abstract ?abstract .\n"
-                + "                                     ?uri rdfs:label ?label .\n"
-                + "                                     ?uri rdf:type ?type .\n"
-                + "                                     ?type rdfs:label ?typeLabel .\n"
-                + "				OPTIONAL{\n"
-                + "                                     ?uri dbo:meshId ?meshId .\n"
-                + "				}\n"
-                + "				OPTIONAL{\n"
-                + "                                     ?uri dbo:icd10 ?icd10 .\n"
-                + "  				}\n"
-                + "				OPTIONAL{\n"
-                + "                                     ?uri dcterms:subject ?subject.\n"
-                + "                                     ?subject rdfs:label ?subjectLabel .\n"
-                + "				}\n"
-                + "				OPTIONAL{\n"
-                + "                                     ?disambiguates  dbpedia-owl:wikiPageDisambiguates  ?uri .\n"
-                + "                                     ?disambiguates rdfs:label ?disambiguatesLabel.\n"
-                + "				}\n"
-                + "				OPTIONAL{\n"
-                + "                                     ?redirect dbpedia-owl:wikiPageRedirects ?uri .                    \n"
-                + "                                     ?redirect rdfs:label ?redirectLabel .\n"
-                + "				}\n"
-                + "                                     FILTER (?uri = <" + resourceURI + "> && langMatches(lang(?label),\"en\")  \n"
-                + "                                             && langMatches(lang(?abstract),\"en\") && langMatches(lang(?disambiguatesLabel),\"en\")\n"
-                + "                                            && langMatches(lang(?redirectLabel ),\"en\") && langMatches(lang(?subjectLabel ),\"en\")\n"
-                + "                                            && langMatches(lang(?typeLabel ),\"en\") && langMatches(lang(?typeLabel ),\"en\")\n"
-                + "                                            && strstarts(str(?type), \"http://dbpedia.org/ontology/\"))  \n"
-                + "                                 }";
-
+        String query = "prefix dbpedia-owl: <http://dbpedia.org/ontology/>\n" +
+"				prefix dcterms: <http://purl.org/dc/terms/>                              \n" +
+"                \n" +
+"                                 SELECT  ?label ?subject ?subjectLabel ?redirect ?redirectLabel ?disambiguates ?disambiguatesLabel \n" +
+"					 ?abstract ?type ?typeLabel ?meshId ?icd10\n" +
+"                                 WHERE {\n" +
+"                                     ?uri dbpedia-owl:abstract ?abstract .\n" +
+"				OPTIONAL{\n" +
+"                                     ?uri rdfs:label ?label .\n" +
+"}\n" +
+"				OPTIONAL{\n" +
+"                                     ?uri rdf:type ?type .\n" +
+"                                     ?type rdfs:label ?typeLabel .\n" +
+"}\n" +
+"				OPTIONAL{\n" +
+"                                     ?uri dbo:meshId ?meshId .\n" +
+"  \n" +
+"				}\n" +
+"				OPTIONAL{\n" +
+"                                     ?uri dbo:icd10 ?icd10 .\n" +
+"  				}\n" +
+"				OPTIONAL{\n" +
+"                                     ?uri dcterms:subject ?subject.\n" +
+"                                     ?subject rdfs:label ?subjectLabel .\n" +
+"				}\n" +
+"				OPTIONAL{\n" +
+"                                     ?disambiguates  dbpedia-owl:wikiPageDisambiguates  ?uri .\n" +
+"                                     ?disambiguates rdfs:label ?disambiguatesLabel.\n" +
+"				}\n" +
+"				OPTIONAL{\n" +
+"                                     ?redirect dbpedia-owl:wikiPageRedirects ?uri .                    \n" +
+"                                     ?redirect rdfs:label ?redirectLabel .\n" +
+"				}\n" +
+"                                     FILTER (?uri = <" + resourceURI + "> \n" +
+"                                     && langMatches(lang(?label),\"en\")  \n" +
+"                                     && langMatches(lang(?abstract),\"en\") \n" +
+"                                     && (lang(?disambiguatesLabel) = \"\" || langMatches(lang(?disambiguatesLabel),\"en\"))\n" +
+"                                     && (lang(?redirectLabel) = \"\" || langMatches(lang(?redirectLabel),\"en\"))\n" +
+"                                     && (lang(?subjectLabel) = \"\" || langMatches(lang(?subjectLabel),\"en\"))\n" +
+"                                     && (lang(?typeLabel) = \"\" || langMatches(lang(?typeLabel),\"en\"))\n" +
+"                                     && (lang(?type) = \"\" || strstarts(str(?type), \"http://dbpedia.org/ontology/\"))\n" +
+")  \n" +
+"                                 }";
+        
+        
+             
         try {
             String searchUrl = "http://dbpedia.org/sparql?"
                     + "query=" + URLEncoder.encode(query, "utf-8")

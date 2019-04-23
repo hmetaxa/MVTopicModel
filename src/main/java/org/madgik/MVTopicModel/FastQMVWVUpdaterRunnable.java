@@ -14,8 +14,10 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import org.knowceans.util.RandomSamplers;
 import org.knowceans.util.Samplers;
 import org.knowceans.util.Vectors;
@@ -29,9 +31,9 @@ import org.knowceans.util.Vectors;
  */
 public class FastQMVWVUpdaterRunnable implements Runnable {
 
-    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
+    public static Logger logger = Logger.getLogger("SciTopic");
     protected int[][][] typeTopicCounts; // indexed by <feature index, topic index>
-    protected int[][] tokensPerTopic; // indexed by <topic index>
+    protected AtomicIntegerArray[] tokensPerTopic; // indexed by <topic index>
     protected FTree[][] trees; //store 
     protected List<BlockingQueue<FastQDelta>> queues;
     protected double[][] alpha;	 // Dirichlet(alpha,alpha,...) is the distribution over topics
@@ -50,8 +52,8 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
     // The max over typeTotals, used for beta[0] optimization
     protected int maxTypeCount[];
     protected Randoms random;
-    protected int[][] docLengthCounts; // histogram of document sizes
-    public int[][][] topicDocCounts; // histogram of document/topic counts, indexed by <topic index, sequence position index>
+    //protected int[][] docLengthCounts; // histogram of document sizes
+    public AtomicIntegerArray[][] topicDocCounts; // histogram of document/topic counts, indexed by <topic index, sequence position index>
 
     protected double[] docSmoothingOnlyMass;
     protected double[][] docSmoothingOnlyCumValues;
@@ -60,9 +62,13 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
     private final CyclicBarrier cyclicBarrier;
     public static final double DEFAULT_BETA = 0.01;
     boolean optimizeParams = false;
+    
+    protected int threadId = -1;
+    protected int nst = -1;
+    protected int nut = -1;
 
     // Optimize gamma[0] hyper params
-    protected List<Integer> inActiveTopicIndex; //inactive topic index for all modalities
+    protected ConcurrentSkipListSet<Integer>  inActiveTopicIndex; //inactive topic index for all modalities
     private NumberFormat formatter;
 
     protected double[][] expDotProductValues;  //<topic,token>
@@ -71,7 +77,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
     public FastQMVWVUpdaterRunnable(
             int[][][] typeTopicCounts,
-            int[][] tokensPerTopic,
+            AtomicIntegerArray[] tokensPerTopic,
             FTree[][] trees,
             //List<ConcurrentLinkedQueue<FastQDelta>> queues, in order not to remain in GC 
             double[][] alpha,
@@ -84,16 +90,19 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
             CyclicBarrier cyclicBarrier,
             int numTopics,
             byte numModalities,
-            int[][] docLengthCounts,
-            int[][][] topicDocCounts,
+            //int[][] docLengthCounts,
+            AtomicIntegerArray[][] topicDocCounts,
             int[] numTypes,
             int[] maxTypeCount,
             Randoms random,
-            List<Integer> inActiveTopicIndex,
+            ConcurrentSkipListSet<Integer> inActiveTopicIndex,
             double[][] expDotProductValues, //<topic,token>
-            double[] sumExpValues // Partition function values per topic     
-    //short[][][] typeTopicSimilarity
-    //        , FTree betaSmoothingTree
+            double[] sumExpValues,// Partition function values per topic     
+            int threadId, 
+            int nst, //numf of sampling threads
+            int nut, //num of updater threads 
+            List<BlockingQueue<FastQDelta>> queues
+    
     ) {
 
         this.alphaSum = alphaSum;
@@ -106,10 +115,14 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
         this.typeTopicCounts = typeTopicCounts;
         this.tokensPerTopic = tokensPerTopic;
         this.trees = trees;
+        this.threadId = threadId;
+        this.nst = nst;
+        this.nut= nut;
+        this.queues = queues; 
 
         this.numTopics = numTopics;
         this.numModalities = numModalities;
-        this.docLengthCounts = docLengthCounts;
+        //this.docLengthCounts = docLengthCounts;
         this.topicDocCounts = topicDocCounts;
         this.numTypes = numTypes;
         this.random = random;
@@ -143,10 +156,11 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
         this.useVectorsLambda = useVectorsLambda;
     }
 
+    /*
     public void setQueues(List<BlockingQueue<FastQDelta>> queues) {
         this.queues = queues;
     }
-
+*/
     public void run() {
 
         Set<Integer> finishedSamplingTreads = new HashSet<Integer>();
@@ -168,15 +182,15 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
                 FastQDelta delta;
                 int[] currentTypeTopicCounts;
-                for (int x = 0; x < queues.size(); x++) {
+                for (int stId = 0; stId < nst; stId++) {
                     //logger.info("Updater thread: processing queue["+x+"]");
-                    while ((delta = queues.get(x).poll()) != null) {
+                    while ((delta = queues.get(threadId*nst+stId).poll()) != null) {
 
                         if (delta.Modality == -1 && delta.NewTopic == -1 && delta.OldTopic == -1 && delta.Type == -1) { // thread x has finished
-                            finishedSamplingTreads.add(x);
-                            isFinished = finishedSamplingTreads.size() == queues.size();
+                            finishedSamplingTreads.add(stId);
+                            isFinished = finishedSamplingTreads.size() == nst;
 
-                            //logger.info("Updater thread: worker["+x+"] has finished");
+                            //logger.info("Updater thread: worker["+stId+"] has finished");
                             continue;
                         }
 
@@ -193,29 +207,29 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                         currentTypeTopicCounts[delta.NewTopic]++;
 
                         if (delta.OldTopic != FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC) {
-                            tokensPerTopic[delta.Modality][delta.OldTopic]--;
-                            if (tokensPerTopic[delta.Modality][delta.OldTopic] < 0) {
+                            tokensPerTopic[delta.Modality].decrementAndGet(delta.OldTopic);
+                            if (tokensPerTopic[delta.Modality].get(delta.OldTopic) < 0) {
                                 logger.info("tokensPerTopic for old Topic " + delta.OldTopic + " below 0");
                             }
 
-                            assert (tokensPerTopic[delta.Modality][delta.OldTopic] >= 0) : "tokensPerTopic for old Topic " + delta.OldTopic + " below 0";
+                            assert (tokensPerTopic[delta.Modality].get(delta.OldTopic) >= 0) : "tokensPerTopic for old Topic " + delta.OldTopic + " below 0";
                         }
 
-                        tokensPerTopic[delta.Modality][delta.NewTopic]++;
+                        tokensPerTopic[delta.Modality].incrementAndGet(delta.NewTopic);
 
                         if (delta.OldTopic != FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC) {
                             //update histograms
-                            topicDocCounts[delta.Modality][delta.OldTopic][delta.DocOldTopicCnt + 1]--;
+                            topicDocCounts[delta.Modality][delta.OldTopic].decrementAndGet(delta.DocOldTopicCnt + 1);
 
                             if (delta.DocOldTopicCnt > 0) {
-                                topicDocCounts[delta.Modality][delta.OldTopic][delta.DocOldTopicCnt]++;
+                                topicDocCounts[delta.Modality][delta.OldTopic].incrementAndGet(delta.DocOldTopicCnt);
                             }
                         }
 
                         if (delta.DocNewTopicCnt > 1) {
-                            topicDocCounts[delta.Modality][delta.NewTopic][delta.DocNewTopicCnt - 1]--;
+                            topicDocCounts[delta.Modality][delta.NewTopic].decrementAndGet(delta.DocNewTopicCnt - 1);
                         }
-                        topicDocCounts[delta.Modality][delta.NewTopic][delta.DocNewTopicCnt]++;
+                        topicDocCounts[delta.Modality][delta.NewTopic].incrementAndGet(delta.DocNewTopicCnt);
 
                         //Update tree
 //                        if (useCycleProposals) {
@@ -228,14 +242,20 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                         if (delta.OldTopic != FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC) {
 
                             double p_wt = (useVectorsLambda != 0 && delta.Modality == 0)
-                                    ? (useVectorsLambda * (expDotProductValues[delta.OldTopic][delta.Type] / sumExpValues[delta.OldTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.OldTopic] + betaSum[delta.Modality])))
-                                    : (currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.OldTopic] + betaSum[delta.Modality]);
+                                    ? (useVectorsLambda * (expDotProductValues[delta.OldTopic][delta.Type] / 
+                                    sumExpValues[delta.OldTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[delta.OldTopic] 
+                                    + beta[delta.Modality]) / (tokensPerTopic[delta.Modality].get(delta.OldTopic) + betaSum[delta.Modality])))
+                                    : (currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality].get(delta.OldTopic)
+                                    + betaSum[delta.Modality]);
 
                             trees[delta.Modality][delta.Type].update(delta.OldTopic, (gamma[delta.Modality] * alpha[delta.Modality][delta.OldTopic] * p_wt));
                         }
                         double p_wt_newTopic = (useVectorsLambda != 0 && delta.Modality == 0)
-                                    ? (useVectorsLambda * (expDotProductValues[delta.NewTopic][delta.Type] / sumExpValues[delta.NewTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.NewTopic] + betaSum[delta.Modality])))
-                                    : (currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.NewTopic] + betaSum[delta.Modality]);
+                                    ? (useVectorsLambda * (expDotProductValues[delta.NewTopic][delta.Type] 
+                                / sumExpValues[delta.NewTopic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[delta.NewTopic] 
+                                + beta[delta.Modality]) / (tokensPerTopic[delta.Modality].get(delta.NewTopic) + betaSum[delta.Modality])))
+                                    : (currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality].get(delta.NewTopic) 
+                                + betaSum[delta.Modality]);
 
                         trees[delta.Modality][delta.Type].update(delta.NewTopic, (gamma[delta.Modality] * alpha[delta.Modality][delta.NewTopic] * p_wt_newTopic ));
                         //}
@@ -262,6 +282,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
             }
 
             try {
+                logger.info("Updater thread: ["+threadId+"] has finished");
                 cyclicBarrier.await();
             } catch (InterruptedException e) {
                 System.out.println("Main Thread interrupted!");
@@ -275,6 +296,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
         }
     }
 
+    /*
     public void optimizeBeta() {
         // The histogram starts at count 0, so if all of the
         //  tokens of the most frequent type were assigned to one topic,
@@ -521,6 +543,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
         return distribution;
     }
+*/
 
 //   
 }

@@ -16,6 +16,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import org.apache.log4j.Logger;
 
 public class FastQMVWVTopicModelDiagnostics {
 
@@ -24,6 +25,7 @@ public class FastQMVWVTopicModelDiagnostics {
     public static final int TWO_PERCENT_INDEX = 1;
     public static final int FIFTY_PERCENT_INDEX = 6;
     public static final double[] DEFAULT_DOC_PROPORTIONS = {0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5};
+    public static Logger logger = Logger.getLogger("SciTopic");
     /**
      * All words in sorted order, with counts
      */
@@ -46,6 +48,7 @@ public class FastQMVWVTopicModelDiagnostics {
     double[] sumCountTimesLogCount;
     int[] wordTypeCounts;
     int numTokens = 0;
+    int[] tokensPerTopicArray;
 
     public FastQMVWVTopicModelDiagnostics(FastQMVWVParallelTopicModel model, int numTopWords) {
         numTopics = model.getNumTopics();
@@ -91,9 +94,15 @@ public class FastQMVWVTopicModelDiagnostics {
         }
 
         collectDocumentStatistics();
+        
+        //int[] tokensPerTopicIntArray = new int[numTopics];
+        tokensPerTopicArray = new int[model.tokensPerTopic[0].length()];
+        for (int pi = 0; pi < model.tokensPerTopic[0].length(); pi++) {
+            tokensPerTopicArray[pi] = model.tokensPerTopic[0].get(pi);
+        }
 
-        diagnostics.add(getTokensPerTopic(model.tokensPerTopic[0]));
-        diagnostics.add(getDocumentEntropy(model.tokensPerTopic[0]));
+        diagnostics.add(getTokensPerTopic(tokensPerTopicArray));
+        diagnostics.add(getDocumentEntropy(tokensPerTopicArray));
         diagnostics.add(getWordLengthScores());
         diagnostics.add(getCoherence());
         diagnostics.add(getDiscrCoherence());
@@ -251,7 +260,7 @@ public class FastQMVWVTopicModelDiagnostics {
     }
 
     public TopicScores getDistanceFromUniform() {
-        int[] tokensPerTopic = model.tokensPerTopic[0];
+        int[] tokensPerTopic = tokensPerTopicArray;
 
         TopicScores scores = new TopicScores("uniform_dist", numTopics, numTopWords);
         scores.wordScoresDefined = true;
@@ -329,7 +338,7 @@ public class FastQMVWVTopicModelDiagnostics {
     }
 
     public TopicScores getEffectiveNumberOfWords() {
-        int[] tokensPerTopic = model.tokensPerTopic[0];
+        int[] tokensPerTopic = tokensPerTopicArray;
 
         TopicScores scores = new TopicScores("eff_num_words", numTopics, numTopWords);
 
@@ -358,7 +367,7 @@ public class FastQMVWVTopicModelDiagnostics {
      */
     public TopicScores getDistanceFromCorpus() {
 
-        int[] tokensPerTopic = model.tokensPerTopic[0];
+        int[] tokensPerTopic = tokensPerTopicArray;
 
         TopicScores scores = new TopicScores("corpus_dist", numTopics, numTopWords);
         scores.wordScoresDefined = true;
@@ -607,6 +616,7 @@ public class FastQMVWVTopicModelDiagnostics {
         //String SQLLitedb = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
 
         Connection connection = null;
+        String current_score = "";
         try {
 
             connection = DriverManager.getConnection(SQLLitedb);
@@ -619,6 +629,7 @@ public class FastQMVWVTopicModelDiagnostics {
             bulkInsert = connection.prepareStatement(sql);
 
             for (byte m = 0; m < model.numModalities; m++) {
+                current_score =  String.format("perplexity %d" , m);
 
                 bulkInsert.setString(1, experimentId);
                 bulkInsert.setString(2, BatchId);
@@ -631,6 +642,7 @@ public class FastQMVWVTopicModelDiagnostics {
                 int p = 1;
                 while (p < model.perplexities[m].length && model.perplexities[m][p] != 0) //for (int p = 0; p < model.perplexities[m].length; p++) 
                 {
+                    current_score =  String.format("LogLikehood %d %d", m,p);
                     bulkInsert.setString(1, experimentId);
                     bulkInsert.setString(2, BatchId);
                     bulkInsert.setString(3, String.format("%d", 10 * p));
@@ -657,6 +669,8 @@ public class FastQMVWVTopicModelDiagnostics {
             for (int topic = 0; topic < numTopics; topic++) {
 
                 for (TopicScores scores : diagnostics) {
+                    current_score = scores.name+String.format(" Topic %d", topic);
+                    
                     bulkInsert.setString(1, experimentId);
                     bulkInsert.setString(2, BatchId);
                     bulkInsert.setString(3, String.format("Topic %d", topic));
@@ -695,13 +709,14 @@ public class FastQMVWVTopicModelDiagnostics {
 
         } catch (SQLException e) {
 
-            System.err.print(e.getMessage());
+            logger.error("Exception in save diagnostics score ["+ current_score +"] : "+ e.getMessage());
+            
             if (connection != null) {
                 try {
-                    System.err.print("Transaction is being rolled back \n");
+                    logger.error("Transaction is being rolled back \n");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    System.err.print("Error in insert expDiagnostics \n");
+                    logger.error("Error in insert expDiagnostics \n");
                 }
             }
         } finally {
@@ -743,7 +758,7 @@ public class FastQMVWVTopicModelDiagnostics {
 
     public String toXML() {
 
-        int[] tokensPerTopic = model.tokensPerTopic[0];
+        int[] tokensPerTopic = tokensPerTopicArray;
 
         StringBuilder out = new StringBuilder();
         Formatter formatter = new Formatter(out, Locale.US);

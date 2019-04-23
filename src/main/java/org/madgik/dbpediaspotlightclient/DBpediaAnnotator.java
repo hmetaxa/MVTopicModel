@@ -138,7 +138,7 @@ public class DBpediaAnnotator {
 
         Connection connection = null;
 
-        int queueSize = 100;
+        int queueSize = 10000;
 
         BlockingQueue<String> newURIsQueue = new ArrayBlockingQueue<String>(queueSize);
 

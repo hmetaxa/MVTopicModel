@@ -14,10 +14,12 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 
 /**
  * Parallel multi-view topic model runnable task using FTrees
@@ -27,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class FastQMVWVWorkerRunnable implements Runnable {
 
     //boolean isFinished = true;
-    public static Logger logger = Logger.getLogger(PTMFlow.class.getName());
+    public static Logger logger = Logger.getLogger("SciTopic");
     public static AtomicInteger newMassCnt = new AtomicInteger(1);
     public static AtomicInteger topicDocMassCnt = new AtomicInteger(1);
     public static AtomicInteger wordFTreeMassCnt = new AtomicInteger(1);
@@ -53,7 +55,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
     protected double[][] p_b; // b for beta prir for modalities correlation
 
     protected int[][][] typeTopicCounts; // indexed by  [modality][tokentype][topic]
-    protected int[][] tokensPerTopic; // indexed by <topic index>
+    protected AtomicIntegerArray[] tokensPerTopic; //int[][] tokensPerTopic; // indexed by <topic index>
 
     //protected int[][][] typeTopicSimilarity; //<modality, token, topic>;
     // for dirichlet estimation
@@ -63,11 +65,13 @@ public class FastQMVWVWorkerRunnable implements Runnable {
     protected FTree[][] trees; //store 
     protected Randoms random;
     protected int threadId = -1;
-    protected BlockingQueue<FastQDelta> queue;
+    protected int nst = -1;
+    protected int nut = -1;
+    protected List<BlockingQueue<FastQDelta>> queues;
     private final CyclicBarrier cyclicBarrier;
     protected int MHsteps = 1;
     //protected boolean useCycleProposals = false;
-    protected List<Integer> inActiveTopicIndex;
+    protected ConcurrentSkipListSet<Integer> inActiveTopicIndex;
 
     protected double[][] expDotProductValues;  //<topic,token>
     protected double[] sumExpValues; // Partition function values per topic     
@@ -86,7 +90,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
             Randoms random,
             ArrayList<MixTopicModelTopicAssignment> data,
             int[][][] typeTopicCounts,
-            int[][] tokensPerTopic,
+            AtomicIntegerArray[] tokensPerTopic,
             int startDoc,
             int numDocs,
             FTree[][] trees,
@@ -96,15 +100,20 @@ public class FastQMVWVWorkerRunnable implements Runnable {
             double[][] p_b, // b for beta prir for modalities correlation
             //            ConcurrentLinkedQueue<FastQDelta> queue, 
             CyclicBarrier cyclicBarrier,
-            List<Integer> inActiveTopicIndex,
+            ConcurrentSkipListSet<Integer> inActiveTopicIndex,
             double[][] expDotProductValues, //<topic,token>
-            double[] sumExpValues // Partition function values per topic     
-
+            double[] sumExpValues, // Partition function values per topic     
+            int nst, //numf of sampling threads
+            int nut, //num of updater threads 
+            List<BlockingQueue<FastQDelta>> queues
     //, FTree betaSmoothingTree
     ) {
 
         this.data = data;
+
         this.threadId = threadId;
+        this.nst = nst;
+        this.nut = nut;
         //this.queue = queue;
         this.cyclicBarrier = cyclicBarrier;
 
@@ -135,14 +144,14 @@ public class FastQMVWVWorkerRunnable implements Runnable {
         this.inActiveTopicIndex = inActiveTopicIndex;
         this.expDotProductValues = expDotProductValues;  //<topic,token>
         this.sumExpValues = sumExpValues; // Partition function values per topic     
+        this.queues = queues;
         //System.err.println("WorkerRunnable Thread: " + numTopics + " topics, " + topicBits + " topic bits, " + 
         //				   Integer.toBinaryString(topicMask) + " topic mask");
     }
 
-    public void setQueue(BlockingQueue<FastQDelta> queue) {
+    /*public void setQueue(BlockingQueue<FastQDelta> queue) {
         this.queue = queue;
-    }
-    
+    }*/
     public void setUseVectorsLambda(double useVectorsLambda) {
         this.useVectorsLambda = useVectorsLambda;
     }
@@ -203,8 +212,10 @@ public class FastQMVWVWorkerRunnable implements Runnable {
 
             shouldSaveState = false;
             //isFinished = true;
-            //logger.info("Worker[" + threadId + "] thread finished");
-            queue.put(new FastQDelta(-1, -1, -1, -1, -1, -1));
+            logger.info("Worker[" + threadId + "] thread finished");
+            for (int utId = 0; utId < nut; utId++) {
+                queues.get(nst * utId + threadId).put(new FastQDelta(-1, -1, -1, -1, -1, -1));
+            }
 
             try {
                 cyclicBarrier.await();
@@ -489,10 +500,10 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                             int topic = localTopicIndex[denseIndex];
                             int n = localTopicCounts[m][topic];
                             double p_wt = (useVectorsLambda != 0 && m == 0)
-                                    ? (useVectorsLambda * (expDotProductValues[topic][type] / sumExpValues[topic]) + (1 - useVectorsLambda) * ((currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m])))
-                                    : (currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m]);
+                                    ? (useVectorsLambda * (expDotProductValues[topic][type] / sumExpValues[topic]) + (1 - useVectorsLambda)
+                                    * ((currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m].get(topic) + betaSum[m])))
+                                    : (currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m].get(topic) + betaSum[m]);
 
-                            
                             topicDocWordMass += (p[m][m] * n + totalMassOtherModalities[topic]) * p_wt; //(currentTypeTopicCounts[topic] + beta[m]) / (tokensPerTopic[m][topic] + betaSum[m]);
                             //topicDocWordMass +=  n * trees[type].getComponent(topic);
                             topicDocWordMasses[denseIndex] = topicDocWordMass;
@@ -509,7 +520,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                         if (sample < newTopicMass) {
                             newMassCnt.getAndIncrement();
 
-                            newTopic = inActiveTopicIndex.get(0);//ThreadLocalRandom.current().nextInt(inActiveTopicIndex.size()));
+                            newTopic = inActiveTopicIndex.first();//ThreadLocalRandom.current().nextInt(inActiveTopicIndex.size()));
                             System.out.println("Sample new topic: " + newTopic);
                         } else {
                             sample -= newTopicMass;
@@ -573,7 +584,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                     //add delta to the queue
                     if (newTopic != oldTopic) {
                         //queue.add(new FastQDelta(oldTopic, newTopic, type, 0, 1, 1));
-                        queue.put(new FastQDelta(oldTopic, newTopic, type, m, oldTopic == FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC ? 0 : localTopicCounts[m][oldTopic], localTopicCounts[m][newTopic]));
+                        queues.get(nst * (type % nut) + threadId).put(new FastQDelta(oldTopic, newTopic, type, m, oldTopic == FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC ? 0 : localTopicCounts[m][oldTopic], localTopicCounts[m][newTopic]));
 //                        if (queue.size()>200)
 //                        {                          
 //                            System.out.println("Thread["+threadId+"] queue size="+queue.size());

@@ -47,7 +47,7 @@ public class SciTopicFlow {
         PPR
     }
 
-    public static Logger logger = Logger.getLogger(SciTopicFlow.class.getName());
+    public static Logger logger = Logger.getLogger("SciTopic");
 
     int topWords = 20;
     int showTopicsInterval = 50;
@@ -81,7 +81,7 @@ public class SciTopicFlow {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String experimentId = "";
     String previousModelFile = "";
-    int limitDocs = 100000;
+    int limitDocs = 0;
     boolean D4I = true;
 
     public SciTopicFlow() throws IOException {
@@ -928,6 +928,8 @@ public class SciTopicFlow {
                         + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
                         + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
                         + "Order by Document.BatchId,   NormWeight Desc";
+                
+                statement.executeUpdate(SQLstr);
 
                 logger.info("Project Topic distribution");
 
@@ -1254,7 +1256,6 @@ public class SciTopicFlow {
         logger.info("Pub citation similarities calculation finished");
     }
 
-  
     public void calcSimilarities(String SQLConnectionString, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
         //calc similarities
 
@@ -1495,9 +1496,13 @@ public class SciTopicFlow {
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
             Alphabet alphabetM = new Alphabet();
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
-            pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
+            if (experimentType == ExperimentType.PubMed) {
+                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ";"));
+            } else {
+                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
+            }
 
-            if (m == 1 && experimentType == ExperimentType.PubMed ) //keywords
+            if (m == 1 && experimentType == ExperimentType.PubMed) //keywords
             {
                 //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
             }
@@ -1522,20 +1527,19 @@ public class SciTopicFlow {
             if (experimentType == ExperimentType.PubMed) {
                 txtsql = "select doctxt_view.docId, text, fulltext, batchid from doctxt_view where repository = 'PubMed Central' "
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
-                if (D4I)
-                {
+                if (D4I) {
                     txtsql = "select distinct ON (doctxt_view.docId)  doctxt_view.docId, text, fulltext, batchid from doctxt_view \n"
-                            + " LEFT JOIN doc_project on doc_project.docid = doctxt_view.docId\n" +
-"where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n" +
-"and (repository = 'PubMed Central' OR  doc_project.projectid IN \n" +
-"(select projectid from doc_project\n" +
-"join document on doc_project.docid = document.id and repository = 'PubMed Central'\n" +
-"group by projectid\n" +
-"having count(*) > 5) )\n" +
-"Order by doctxt_view.docId \n"
-                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
+                            + " LEFT JOIN doc_project on doc_project.docid = doctxt_view.docId\n"
+                            + "where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n"
+                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                            + "(select projectid from doc_project\n"
+                            + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
+                            + "group by projectid\n"
+                            + "having count(*) > 5) )\n"
+                            + "Order by doctxt_view.docId \n"
+                            + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
                 }
-                
+
             }
 
             if (experimentType == ExperimentType.ACM) {
@@ -1552,19 +1556,18 @@ public class SciTopicFlow {
 
             } else if (experimentType == ExperimentType.PubMed) {
                 sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where repository = 'PubMed Central' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                if (D4I)
-                {
-                    sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n" +
-"from docsideinfo_view  \n" +
-"LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n" +
-"where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n" +
-"and (repository = 'PubMed Central' OR  doc_project.projectid IN \n" +
-"(select projectid from doc_project\n" +
-"join document on doc_project.docid = document.id and repository = 'PubMed Central'\n" +
-"group by projectid\n" +
-"having count(*) > 5) )\n" +
-"Order by docsideinfo_view.docId \n"
-                    + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                if (D4I) {
+                    sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
+                            + "from docsideinfo_view  \n"
+                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
+                            + "where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n"
+                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                            + "(select projectid from doc_project\n"
+                            + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
+                            + "group by projectid\n"
+                            + "having count(*) > 5) )\n"
+                            + "Order by docsideinfo_view.docId \n"
+                            + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 }
 
             }
@@ -1708,17 +1711,18 @@ public class SciTopicFlow {
 
                             if (numModalities > 3) {
                                 String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
+                                //http://dbpedia.org/resource/Aerosol:3;http://dbpedia.org/resource/Growth_factor:4;http://dbpedia.org/resource/Hygroscopy:4;http://dbpedia.org/resource/Planetary_boundary_layer:3
                                 String DBPediaResourceStr = "";
                                 if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] DBPediaResources = tmpStr.trim().split(",");
+                                    String[] DBPediaResources = tmpStr.trim().split(";");
                                     for (int j = 0; j < DBPediaResources.length; j++) {
-                                        String[] pairs = DBPediaResources[j].trim().split(";");
+                                        String[] pairs = DBPediaResources[j].trim().split("#");
                                         if (pairs.length == 2) {
                                             for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                DBPediaResourceStr += pairs[0] + ",";
+                                                DBPediaResourceStr += pairs[0] + ";";
                                             }
                                         } else {
-                                            DBPediaResourceStr += DBPediaResources[j] + ",";
+                                            DBPediaResourceStr += DBPediaResources[j] + ";";
 
                                         }
                                     }
@@ -1735,7 +1739,6 @@ public class SciTopicFlow {
                 }
             }
 
-          
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
@@ -1782,7 +1785,7 @@ public class SciTopicFlow {
 
         // pruning for all other modalities no text
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
-            if (pruneLblCntPerc > 0 & instances[m].size()>10) {
+            if (pruneLblCntPerc > 0 & instances[m].size() > 10) {
 
                 // Check which type of data element the instances contain
                 Instance firstInstance = instances[m].get(0);
@@ -1817,7 +1820,7 @@ public class SciTopicFlow {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed )) ? prCnt * 2 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
@@ -1852,8 +1855,6 @@ public class SciTopicFlow {
         return instances;
 
     }
-
- 
 
     public static void main(String[] args) throws Exception {
         Class.forName("org.postgresql.Driver");
