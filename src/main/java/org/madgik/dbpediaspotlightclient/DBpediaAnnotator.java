@@ -323,7 +323,7 @@ public class DBpediaAnnotator {
         logger.info("DBPedia annotation started");
         c.getPropValues(null);
         logger.info("DBPedia annotation: Annotate new publications");
-        //c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
+        c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
         logger.info("DBPedia annotation: Get extra fields from DBPedia");
         c.updateResourceDetails(ExperimentType.PubMed);
 
