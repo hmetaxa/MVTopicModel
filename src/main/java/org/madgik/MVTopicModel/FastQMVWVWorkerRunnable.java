@@ -424,6 +424,8 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                 //	Iterate over the positions (words) in the document 
                 for (int position = 0; position < docLength[m]; position++) {
                     type = tokenSequenceCurMod.getIndexAtPosition(position);
+                     if (type >= typeTopicCounts[m].length)
+                        continue; 
                     oldTopic = oneDocTopics[m][position];
 
                     currentTypeTopicCounts = typeTopicCounts[m][type];
@@ -582,7 +584,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                     }
 
                     //add delta to the queue
-                    if (newTopic != oldTopic) {
+                    if (newTopic != oldTopic && nut>0) {
                         //queue.add(new FastQDelta(oldTopic, newTopic, type, 0, 1, 1));
                         queues.get(nst * (type % nut) + threadId).put(new FastQDelta(oldTopic, newTopic, type, m, oldTopic == FastQMVWVParallelTopicModel.UNASSIGNED_TOPIC ? 0 : localTopicCounts[m][oldTopic], localTopicCounts[m][newTopic]));
 //                        if (queue.size()>200)

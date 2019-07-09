@@ -1,27 +1,19 @@
 package org.madgik.MVTopicModel;
 
-import cc.mallet.types.*;
 import cc.mallet.pipe.*;
+import cc.mallet.types.*;
 import cc.mallet.util.Maths;
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
-import gnu.trove.map.hash.TObjectIntHashMap;
-
-import java.util.*;
-import java.io.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
-
 import org.madgik.utils.CSV2FeatureSequence;
-import org.madgik.utils.FeatureSequenceRemovePlural;
+
+import java.io.*;
+import java.sql.*;
+import java.util.*;
+
 import static org.madgik.utils.Utils.cosineSimilarity;
 
 public class SciTopicFlow {
@@ -49,40 +41,42 @@ public class SciTopicFlow {
 
     public static Logger logger = Logger.getLogger("SciTopic");
 
-    int topWords = 20;
-    int showTopicsInterval = 50;
-    byte numModalities = 6;
+    private int topWords = 20;
+    private int showTopicsInterval = 50;
+    private byte numModalities = 6;
 
-    int numOfThreads = 4;
-    int numTopics = 400;
-    int numIterations = 800; //Max 2000
-    int numChars = 4000;
-    int burnIn = 50;
-    int optimizeInterval = 50;
-    ExperimentType experimentType = ExperimentType.PubMed;
+    private int numOfThreads = 4;
+    private int numTopics = 400;
+    private int numIterations = 200; //Max 2000
+    private int numChars = 4000;
+    private int burnIn = 50;
+    private int optimizeInterval = 50;
+    private  ExperimentType experimentType = ExperimentType.ACM;
 
-    double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
-    double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
-    double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
+    private double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
+    private double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
+    private double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
 
-    boolean ACMAuthorSimilarity = true;
-    boolean calcTopicDistributionsAndTrends = true;
-    boolean calcEntitySimilarities = true;
-    boolean calcTopicSimilarities = false;
-    boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = true;
-    boolean runWordEmbeddings = false;
-    boolean useTypeVectors = false;
-    boolean trainTypeVectors = false;
-    boolean findKeyPhrases = false;
-    double useTypeVectorsProb = 0.6;
-    Net2BoWType PPRenabled = Net2BoWType.OneWay;
-    int vectorSize = 200;
-    String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
-    String experimentId = "";
-    String previousModelFile = "";
-    int limitDocs = 0;
-    boolean D4I = true;
+    private boolean ACMAuthorSimilarity = true;
+    private boolean calcTopicDistributionsAndTrends = false;
+    private boolean calcEntitySimilarities = false;
+    private boolean calcTopicSimilarities = false;
+    private boolean calcPPRSimilarities = false;
+    private boolean runTopicModelling = true;
+    private boolean runInference = true;
+    private boolean runWordEmbeddings = false;
+    private boolean useTypeVectors = false;
+    private boolean trainTypeVectors = false;
+    private boolean findKeyPhrases = false;
+
+    private double useTypeVectorsProb = 0.2;
+    private Net2BoWType PPRenabled = Net2BoWType.OneWay;
+    private int vectorSize = 200;
+    private String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
+    private String experimentId = "";
+    private String previousModelFile = "";
+    private int limitDocs = 10000;
+    private boolean D4I = true;
 
     public SciTopicFlow() throws IOException {
         this(null);
@@ -115,13 +109,13 @@ public class SciTopicFlow {
 
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
+
         }
 
         if (runWordEmbeddings) {
             logger.info(" calc word embeddings starting");
-            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    false, limitDocs);
+            InstanceList[] instances = ImportInstancesWithNewPipes(ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, ""), experimentType, numModalities,
+                    pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, false, (experimentType == ExperimentType.PubMed) ? ";" : ",");
 
             logger.info(" instances added through pipe");
 
@@ -146,9 +140,10 @@ public class SciTopicFlow {
 
             logger.info(" TopicModelling has started");
             String batchId = "-1";
-            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    false, limitDocs);
+
+            InstanceList[] instances = ImportInstancesWithNewPipes(ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, ""), experimentType, numModalities,
+                    pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, false, (experimentType == ExperimentType.PubMed) ? ";" : ",");
+
             logger.info("Instances added through pipe");
 
             double beta = 0.01;
@@ -165,8 +160,9 @@ public class SciTopicFlow {
 
             //double gammaRoot = 4;
             FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(numTopics, numModalities, alpha, beta, useCycleProposals, SQLConnectionString, useTypeVectors, useTypeVectorsProb, trainTypeVectors);
+            model.setSaveSerializedModel(50, "experimentId.model");
 
-            model.CreateTables(SQLConnectionString, experimentId);
+            model.DeletePreviousExperiment(SQLConnectionString, experimentId);
 
             // ParallelTopicModel model = new ParallelTopicModel(numTopics, 1.0, 0.01);
             model.setNumIterations(numIterations);
@@ -176,7 +172,7 @@ public class SciTopicFlow {
             model.burninPeriod = burnIn;
             model.setNumThreads(numOfThreads);
 
-            model.addInstances(instances, batchId, vectorSize, "");//trainingInstances);//instances);
+            model.addInstances(instances, batchId, vectorSize, null);//trainingInstances);//instances);
             logger.info(" instances added");
 
             //model.readWordVectorsDB(SQLConnectionString, vectorSize);
@@ -204,28 +200,73 @@ public class SciTopicFlow {
             }
 
         }
-        if (calcTopicDistributionsAndTrends) {
 
-            CalcEntityTopicDistributionsAndTrends(SQLConnectionString, experimentId);
+        if (runInference) {
+
+            logger.info(" Inference on new docs has started");
+            String batchId = "-1";
+
+            FastQMVWVTopicInferencer inferencer = null;
+            /*
+            String inferencerFilename = "";
+
+            if (!inferencerFilename.isEmpty()) {
+
+                try {
+                    inferencer = FastQMVWVTopicInferencer.read(new File(inferencerFilename));
+                } catch (Exception e) {
+                    logger.error("Unable to restore saved topic model "
+                            + inferencerFilename + ": " + e);
+
+                }
+            }
+            */
+            
+          
+
+                try {
+                    inferencer = FastQMVWVTopicInferencer.read(SQLConnectionString, experimentId);
+                } catch (Exception e) {
+                    logger.error("Unable to restore saved topic model "
+                            + experimentId + ": " + e);
+
+                }
+          
+
+                InstanceList[] instances = ImportInstancesWithExistingPipes(
+                        ReadDataFromDB(SQLConnectionString, experimentType, numModalities, 10, "WHERE batchid>'2018'"), 
+                        inferencer.getPipes(), numModalities);
+
+                logger.info("Instances added through pipe");
+
+                inferencer.inferTopicDistributionsOnNewDocs(instances, SQLConnectionString, experimentId, null);
+           
+            }
+
+            if (calcTopicDistributionsAndTrends) {
+
+                CalcEntityTopicDistributionsAndTrends(SQLConnectionString, experimentId);
+
+            }
+
+            if (calcEntitySimilarities) {
+
+                calcSimilarities(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
+
+            }
+
+            if (calcTopicSimilarities) {
+                experimentId = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
+                CalcTopicSimilarities(SQLConnectionString, experimentId);
+            }
+
+            if (calcPPRSimilarities) {
+                calcPPRSimilarities(SQLConnectionString);
+            }
 
         }
 
-        if (calcEntitySimilarities) {
-
-            calcSimilarities(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
-
-        }
-
-        if (calcTopicSimilarities) {
-            experimentId = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
-            CalcTopicSimilarities(SQLConnectionString, experimentId);
-        }
-
-        if (calcPPRSimilarities) {
-            calcPPRSimilarities(SQLConnectionString);
-        }
-
-    }
+    
 
     public void getPropValues(Map<String, String> runtimeProp) throws IOException {
 
@@ -364,13 +405,13 @@ public class SciTopicFlow {
 
             String sql = "select doc_topic.TopicId, document.title, document.abstract from \n"
                     + "doc_topic\n"
-                    + "inner join publication on doc_topic.pubId= document.doc_id and doc_topic.Weight>0.55 \n"
+                    + "inner join document on doc_topic.docId= document.docid and doc_topic.Weight>0.55 \n"
                     + "where experimentId='" + experimentId + "' \n"
                     + "order by doc_topic.topicid, weight desc";
 
             ResultSet rs = statement.executeQuery(sql);
 
-            HashMap<Integer, Map<String, ArrayList<Integer>>> topicTitles = null;
+            HashMap<Integer, Map<String, ArrayList<Integer>>> topicTitles;
 
             topicTitles = new HashMap<Integer, Map<String, ArrayList<Integer>>>();
 
@@ -396,7 +437,7 @@ public class SciTopicFlow {
             topiaDoc = termExtractor.extractTerms(stringBuffer.toString());
             topicTitles.put(topicId, topiaDoc.getFinalFilteredTerms());
 
-            statement.executeUpdate("create table if not exists TopicKeyPhrase ( TopicId Integer, Tagger TEXT, Phrase Text, Count Integer, WordsNum Integer, Weight double, ExperimentId TEXT) ");
+            statement.executeUpdate("create table if not exists TopicKeyPhrase ( TopicId Integer, Tagger TEXT, Phrase Text, Count Integer, WordsNum Integer, Weight numeric, ExperimentId TEXT) ");
             String deleteSQL = String.format("Delete from TopicKeyPhrase WHERE ExperimentId='" + experimentId + "' AND Tagger ='" + tagger + "'");
             statement.executeUpdate(deleteSQL);
 
@@ -639,7 +680,7 @@ public class SciTopicFlow {
 
         Iterator<String> wordIter = alphabet.iterator();
         while (wordIter.hasNext()) {
-            String word = (String) wordIter.next();
+            String word = wordIter.next();
 
             if (!word.matches("^(?!.*(-[^-]*-|_[^_]*_))[A-Za-z0-9][\\w-]*[A-Za-z0-9]$") || word.length() < 3 || word.contains("cid") || word.contains("italic") || word.contains("null") || word.contains("usepackage") || word.contains("fig")) {
                 prunedTokenizer.stop(word);
@@ -810,6 +851,26 @@ public class SciTopicFlow {
                         + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
                         + "Order by Document.BatchId,   NormWeight Desc";
 
+                statement.executeUpdate(SQLstr);
+
+                logger.info("Repository Topic distribution for the whole coprus");
+
+                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                        + "select '',  doc_topic.TopicId, Document.Repository, 'Repository', \n"
+                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
+                        + "from doc_topic\n"
+                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
+                        + "INNER JOIN (SELECT Document.Repository, sum(weight) AS BatchSumWeight, ExperimentId\n"
+                        + "FROM doc_topic\n"
+                        + "INNER JOIN Document ON doc_topic.docid= Document.docid AND\n"
+                        + "doc_topic.weight>0.1\n "
+                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
+                        + "GROUP BY Document.Repository, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.Repository = Document.Repository and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
+                        + "group By Document.Repository,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
+                        + "Order by Document.Repository,   NormWeight Desc";
+
+                statement.executeUpdate(SQLstr);
+
                 logger.info("Author Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
@@ -928,7 +989,7 @@ public class SciTopicFlow {
                         + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
                         + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
                         + "Order by Document.BatchId,   NormWeight Desc";
-                
+
                 statement.executeUpdate(SQLstr);
 
                 logger.info("Project Topic distribution");
@@ -1326,6 +1387,8 @@ public class SciTopicFlow {
                 similarityVectors = new HashMap<String, double[]>();
             }
 
+
+
             String labelId = "";
             int[] topics = new int[numTopics];
             double[] weights = new double[numTopics];
@@ -1468,46 +1531,12 @@ public class SciTopicFlow {
         logger.info("similarities calculation finished");
     }
 
-    public InstanceList[] GenerateAlphabets(String SQLConnection, ExperimentType experimentType, String dictDir, byte numModalities,
-            double pruneCntPerc, double pruneLblCntPerc, double pruneMaxPerc, int numChars, Net2BoWType PPRenabled, boolean ignoreText, int limitDocs) {
-
-        //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
-        // Begin by importing documents from text to feature sequences
-        ArrayList<Pipe> pipeListText = new ArrayList<Pipe>();
-
-        // Pipes: lowercase, tokenize, remove stopwords, map to features
-        pipeListText.add(new Input2CharSequence()); //homer
-        pipeListText.add(new CharSequenceLowercase());
-
-        SimpleTokenizer tokenizer = new SimpleTokenizer(new File("stoplists/en.txt"));
-        pipeListText.add(tokenizer);
-
-        Alphabet alphabet = new Alphabet();
-        pipeListText.add(new StringList2FeatureSequence(alphabet));
-        //pipeListText.add(new FeatureSequenceRemovePlural(alphabet));
-
+    // Read data from DB and convert them to a list of instances per view (modality)
+    // Modality 0 should be text (e.g., "This a new doc. We will tokenize it later"
+    // For all other modalities (metadata) we end up with a comma delimeted string (i.e., "keyword1, key phrase1, keyword2, keyword2")
+    // Some modalities may be missing for some docs
+    public ArrayList<ArrayList<Instance>> ReadDataFromDB(String SQLConnection, ExperimentType experimentType, byte numModalities, int limitDocs, String filter) {
         ArrayList<ArrayList<Instance>> instanceBuffer = new ArrayList<ArrayList<Instance>>(numModalities);
-        InstanceList[] instances = new InstanceList[numModalities];
-
-        if (!ignoreText) {
-            instances[0] = new InstanceList(new SerialPipes(pipeListText));
-        }
-        // Other Modalities
-        for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
-            Alphabet alphabetM = new Alphabet();
-            ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
-            if (experimentType == ExperimentType.PubMed) {
-                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ";"));
-            } else {
-                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
-            }
-
-            if (m == 1 && experimentType == ExperimentType.PubMed) //keywords
-            {
-                //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
-            }
-            instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
-        }
 
         //createCitationGraphFile("C:\\projects\\Datasets\\DBLPManage\\acm_output_NET.csv", "jdbc:sqlite:C:/projects/Datasets/DBLPManage/acm_output.db");
         for (byte m = 0; m < numModalities; m++) {
@@ -1522,41 +1551,26 @@ public class SciTopicFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
-            if (experimentType == ExperimentType.PubMed) {
-                txtsql = "select doctxt_view.docId, text, fulltext, batchid from doctxt_view where repository = 'PubMed Central' "
-                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
-                if (D4I) {
-                    txtsql = "select distinct ON (doctxt_view.docId)  doctxt_view.docId, text, fulltext, batchid from doctxt_view \n"
-                            + " LEFT JOIN doc_project on doc_project.docid = doctxt_view.docId\n"
-                            + "where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n"
-                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
-                            + "(select projectid from doc_project\n"
-                            + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
-                            + "group by projectid\n"
-                            + "having count(*) > 5) )\n"
-                            + "Order by doctxt_view.docId \n"
-                            + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
-                }
-
-            }
+            String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + filter + " Order by doctxt_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
             if (experimentType == ExperimentType.ACM) {
 
+                sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+
+                /*
                 if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  docid,   citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  docid,   citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.OneWay) {
 
-                    sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
                 }
-
+                 */
             } else if (experimentType == ExperimentType.PubMed) {
-                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where repository = 'PubMed Central' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                if (D4I) {
+                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                /* if (D4I) {
                     sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
                             + "from docsideinfo_view  \n"
                             + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
@@ -1568,7 +1582,7 @@ public class SciTopicFlow {
                             + "having count(*) > 5) )\n"
                             + "Order by docsideinfo_view.docId \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                }
+                }*/
 
             }
 
@@ -1619,18 +1633,31 @@ public class SciTopicFlow {
                             }
 
                             if (numModalities > 2) {
-                                String tmpStr = rs.getString("Categories");//.replace("\t", ",");
+                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
+                                String DBPediaResourceStr = "";
                                 if (tmpStr != null && !tmpStr.equals("")) {
+                                    String[] DBPediaResources = tmpStr.trim().split(",");
+                                    for (int j = 0; j < DBPediaResources.length; j++) {
+                                        String[] pairs = DBPediaResources[j].trim().split(";");
+                                        if (pairs.length == 2) {
+                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
+                                                DBPediaResourceStr += pairs[0] + ",";
+                                            }
+                                        } else {
+                                            DBPediaResourceStr += DBPediaResources[j] + ",";
 
-                                    instanceBuffer.get(2).add(new Instance(tmpStr, null, rs.getString("docid"), "category"));
+                                        }
+                                    }
+                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
+                                    instanceBuffer.get(2).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResource"));
                                 }
                             }
 
                             if (numModalities > 3) {
-                                String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
-                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
+                                String tmpStr = rs.getString("Categories");//.replace("\t", ",");
+                                if (tmpStr != null && !tmpStr.equals("")) {
 
-                                    instanceBuffer.get(3).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "Venue"));
+                                    instanceBuffer.get(3).add(new Instance(tmpStr, null, rs.getString("docid"), "category"));
                                 }
                             }
 
@@ -1655,28 +1682,15 @@ public class SciTopicFlow {
                                 }
                             }
 
-//DBPediaResources
                             if (numModalities > 5) {
-                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
-                                String DBPediaResourceStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] DBPediaResources = tmpStr.trim().split(",");
-                                    for (int j = 0; j < DBPediaResources.length; j++) {
-                                        String[] pairs = DBPediaResources[j].trim().split(";");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                DBPediaResourceStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            DBPediaResourceStr += DBPediaResources[j] + ",";
+                                String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
+                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
 
-                                        }
-                                    }
-                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(5).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResource"));
+                                    instanceBuffer.get(5).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "Venue"));
                                 }
                             }
 
+//DBPediaResources
                             if (numModalities > 6) {
                                 String tmpAuthorsStr = rs.getString("Authors");//.replace("\t", ",");
                                 if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
@@ -1756,17 +1770,79 @@ public class SciTopicFlow {
             }
         }
 
-        logger.info("Read " + instanceBuffer.get(0).size() + " instances modality: " + instanceBuffer.get(0).get(0).getSource().toString());
+        for (byte m = (byte) 0; m < numModalities; m++) {
+
+            logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
+
+        }
+        return instanceBuffer;
+
+    }
+
+    public InstanceList[] ImportInstancesWithExistingPipes(ArrayList<ArrayList<Instance>> instanceBuffer, Pipe[] existingPipes, byte numModalities) {
+        if (existingPipes.length < numModalities) {
+            logger.error("ImportDataWithExistingPipes: Missing existing pipes");
+            return null;
+
+        }
+
+        InstanceList[] instances = new InstanceList[numModalities];
+
+        for (byte m = 0; m < numModalities; m++) {
+            instances[m] = new InstanceList(existingPipes[m]);
+            instances[m].addThruPipe(instanceBuffer.get(m).iterator());
+        }
+
+        return instances;
+
+    }
+
+    public InstanceList[] ImportInstancesWithNewPipes(ArrayList<ArrayList<Instance>> instanceBuffer, ExperimentType experimentType, byte numModalities,
+            double pruneCntPerc, double pruneLblCntPerc, double pruneMaxPerc, boolean ignoreText, String csvDelimeter) {
+
+        InstanceList[] instances = new InstanceList[numModalities];
+
+        //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
+        // Begin by importing documents from text to feature sequences
+        ArrayList<Pipe> pipeListText = new ArrayList<Pipe>();
+
+        // Pipes: lowercase, tokenize, remove stopwords, map to features
+        pipeListText.add(new Input2CharSequence()); //homer
+        pipeListText.add(new CharSequenceLowercase());
+
+        SimpleTokenizer tokenizer = new SimpleTokenizer(new File("stoplists/en.txt"));
+        pipeListText.add(tokenizer);
+
+        Alphabet alphabet = new Alphabet();
+        pipeListText.add(new StringList2FeatureSequence(alphabet));
+        //pipeListText.add(new FeatureSequenceRemovePlural(alphabet));
+        if (!ignoreText) {
+            instances[0] = new InstanceList(new SerialPipes(pipeListText));            
+            
+        }
+        // Other Modalities
+        for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
+            Alphabet alphabetM = new Alphabet();
+            ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
+            pipeListCSV.add(new CSV2FeatureSequence(alphabetM, csvDelimeter));
+
+            /*if (experimentType == ExperimentType.PubMed) {
+                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ";"));
+            } else {
+                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
+            }*/
+            //if (m == 1 ) //keywords
+            //{
+            //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
+            //}
+            instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
+        }
 
         if (!ignoreText) {
             try {
                 int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * pruneCntPerc);
                 GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, pruneMaxPerc, false);
                 instances[0].addThruPipe(instanceBuffer.get(0).iterator());
-                //Alphabet tmpAlp = instances[0].getDataAlphabet();
-                //ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(txtAlphabetFile)));
-                //oos.writeObject(tmpAlp);
-                //oos.close();
             } catch (IOException e) {
                 logger.error("Problem adding text: "
                         + e);
@@ -1776,12 +1852,8 @@ public class SciTopicFlow {
 
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
 
-            logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
-            //instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
             instances[m].addThruPipe(instanceBuffer.get(m).iterator());
         }
-
-        logger.info(" instances added through pipe");
 
         // pruning for all other modalities no text
         for (byte m = ignoreText ? (byte) 0 : (byte) 1; m < numModalities; m++) {
@@ -1797,7 +1869,8 @@ public class SciTopicFlow {
 
                     // It's necessary to create a new instance list in
                     //  order to make sure that the data alphabet is correct.
-                    Noop newPipe = new Noop(newAlphabet, instances[m].getTargetAlphabet());
+                    SerialPipes newPipe =  new SerialPipes(((SerialPipes) instances[m].getPipe()).pipes()); 
+                    //new Noop(newAlphabet, instances[m].getTargetAlphabet());
                     InstanceList newInstanceList = new InstanceList(newPipe);
 
                     // Iterate over the instances in the old list, adding
@@ -1820,7 +1893,7 @@ public class SciTopicFlow {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 3 && experimentType == ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
